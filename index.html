@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Busca obras públicas paralizadas en el Perú y consulta su entidad, avance y documentos oficiales.">
+  <meta name="theme-color" content="#152927">
+  <title>Obras que esperan · Buscador de obras paralizadas</title>
+  <link rel="stylesheet" href="estilos.css">
+  <script defer src="obras.js"></script>
+  <script defer src="buscador.js"></script>
+</head>
+<body>
+  <a class="skip" href="#busqueda">Ir al buscador</a>
+  <header class="top">
+    <div class="wrap topline">
+      <a class="marca" href="./"><span class="marca-icono" aria-hidden="true"></span>Obras que esperan</a>
+      <a href="#fuentes">Fuentes y metodología</a>
+    </div>
+    <div class="wrap intro">
+      <p class="corte"><span aria-hidden="true"></span> Perú · Corte al 30 de junio de 2026</p>
+      <h1>¿Qué obras están<br>paralizadas?</h1>
+      <p>Encuentra obras públicas por lugar, identifica la entidad a cargo y consulta la documentación oficial.</p>
+    </div>
+  </header>
+  <main class="wrap">
+    <form id="busqueda" role="search" aria-label="Buscar obras paralizadas">
+      <label class="consulta">Busca por obra, entidad, lugar, CUI o código INFOBRAS
+        <input id="q" type="search" placeholder="Ej. colegio en Cusco, Municipalidad de Ilave, 2100376">
+      </label>
+      <div class="filtros">
+        <label>Departamento<select id="dep"></select></label>
+        <label>Provincia<select id="prov"></select></label>
+        <label>Distrito<select id="dist"></select></label>
+        <label>Tipo de obra<select id="tipo"></select></label>
+        <label>Avance físico<select id="avance">
+          <option value="">Cualquier avance</option>
+          <option value="90">Desde 90 %</option>
+          <option value="100">100 % reportado</option>
+          <option value="sin">Sin dato</option>
+        </select></label>
+      </div>
+      <div class="form-actions">
+        <button class="text-button" id="limpiar" type="button">Limpiar filtros</button>
+      </div>
+    </form>
+    <section id="resultados" aria-labelledby="titulo-resultados">
+      <div class="results-head">
+        <div><h2 id="titulo-resultados">Obras en el corte</h2><p id="conteo" role="status">Cargando el inventario…</p></div>
+        <button id="descargar" type="button" class="button secondary" disabled>Descargar CSV</button>
+      </div>
+      <div class="sort-row">
+        <label>Ordenar por <select id="orden"><option value="original">Orden del anexo</option><option value="avance">Mayor avance</option><option value="costo">Mayor costo de obra</option></select></label>
+      </div>
+      <ul id="lista" class="lista" aria-label="Obras encontradas"></ul>
+      <nav id="paginacion" class="pagination" aria-label="Páginas de resultados" hidden>
+        <button id="anterior" type="button" class="button secondary">Anterior</button>
+        <span id="pagina"></span>
+        <button id="siguiente" type="button" class="button secondary">Siguiente</button>
+      </nav>
+    </section>
+    <section id="fuentes" class="fuentes">
+      <h2>Fuentes y metodología</h2>
+      <p>El buscador cuenta registros por código INFOBRAS en el Anexo 1 de la Contraloría al 30 de junio de 2026. Una inversión puede agrupar varias obras con el mismo CUI.</p>
+      <p>El avance físico corresponde al corte. Para confirmar el estado actual, la recepción o la prestación del servicio, consulta a la entidad y revisa los sistemas oficiales.</p>
+      <a id="fuente">Informe de Contraloría</a> · <a id="anexo">Anexo original (XLSX)</a>
+    </section>
+  </main>
+  <dialog id="ficha" aria-labelledby="nombre-ficha">
+    <div class="ficha-top">
+      <span>Ficha de obra</span>
+      <form method="dialog"><button class="button secondary" value="cerrar" autofocus>Cerrar</button></form>
+    </div>
+    <article id="detalle"></article>
+  </dialog>
+  <noscript><p class="wrap">Activa JavaScript para buscar en el inventario.</p></noscript>
+</body>
+</html>
