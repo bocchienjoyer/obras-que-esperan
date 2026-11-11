@@ -24,7 +24,7 @@ La Contraloría publica el inventario en formato reutilizable y lo vincula con d
 
 Abre [el buscador local](dist/index.html) directamente en un navegador. Para servirlo desde HTTP, ejecuta `python -m http.server 8000 --directory dist` en la raíz y visita [localhost:8000](http://localhost:8000).
 
-Ejemplo: selecciona **Cusco → La Convención → Echarate**, abre una ficha, revisa la entidad y descarga el CSV filtrado. En una ficha con documentos, abre el informe de estado situacional o la resolución. Para confirmar el estado posterior al corte, consulta INFOBRAS y el MEF usando los identificadores mostrados.
+Ejemplo: selecciona **Cusco → La Convención → Echarate** o escribe **¿Cuántas obras paralizadas hay en Echarate?**. Abre una ficha, revisa la entidad y descarga el CSV filtrado. Usa **CUI 2100376** o **INFOBRAS 59** para consultar por código exacto. Los enlaces a informes y resoluciones provienen del anexo. Para confirmar el estado posterior al corte o recuperar un documento que no abre, consulta INFOBRAS y el MEF usando los identificadores de la ficha.
 
 [Buscador nacional](docs/capturas/01-buscador.png) · [Filtro territorial](docs/capturas/02-filtro-territorial.png) · [Ficha de obra](docs/capturas/03-ficha.png)
 

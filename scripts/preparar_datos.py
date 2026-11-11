@@ -11,6 +11,7 @@ from urllib.parse import urlsplit
 from urllib.request import urlopen
 
 from openpyxl import load_workbook
+from openpyxl.utils.datetime import from_excel
 
 FUENTE = "https://www.gob.pe/institucion/contraloria/informes-publicaciones/8489152-informe-de-obras-paralizadas-en-el-territorio-nacional-a-junio-de-2026"
 ANEXO = "https://cdn.www.gob.pe/uploads/document/file/10466637/8489152-anexo-n-01-base-de-datos-con-la-lista-de-obras-publicas-paralizadas-en-el-territorio-nacional.XLSX?v=1787003153"
@@ -32,6 +33,12 @@ def codigo(valor):
 
 def numero(valor):
     return valor if isinstance(valor, (int, float)) and math.isfinite(valor) else None
+
+
+def fecha(valor, epoca):
+    if isinstance(valor, (int, float)):
+        valor = from_excel(valor, epoch=epoca)
+    return texto(valor)
 
 
 def documento(valor):
@@ -57,13 +64,15 @@ def preparar(contenido):
                 "obra": texto(fila[5]), "entidad": texto(fila[6]),
                 "modalidad": texto(fila[8]), "costo": numero(fila[9]),
                 "pim": numero(fila[14]), "tipo": texto(fila[16]),
+                "categoria": texto(fila[17]), "subtipo": texto(fila[18]),
                 "departamento": texto(fila[19]), "provincia": texto(fila[20]),
-                "distrito": texto(fila[21]), "inicio": numero(fila[22]),
+                "distrito": texto(fila[21]),
+                "inicio": texto(fila[22]) if isinstance(fila[22], str) else numero(fila[22]),
                 "avance": numero(fila[24]), "nivel": texto(fila[26]),
                 "sector": texto(fila[27]), "causa": texto(fila[28]),
                 "organo": texto(fila[29]), "inventarioMef": texto(fila[30]),
-                "fechaInforme": texto(fila[33]), "informe": documento(fila[34]),
-                "priorizada": texto(fila[35]), "fechaResolucion": texto(fila[36]),
+                "fechaInforme": fecha(fila[33], libro.epoch), "informe": documento(fila[34]),
+                "priorizada": texto(fila[35]), "fechaResolucion": fecha(fila[36], libro.epoch),
                 "resolucion": documento(fila[37]),
             })
     finally:
