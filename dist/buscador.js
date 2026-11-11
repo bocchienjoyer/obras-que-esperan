@@ -1,6 +1,7 @@
 "use strict";
 
-const { obras, corte, fuente, anexo, anioPim, revisado } = globalThis.INVENTARIO;
+const inventario = inventarioValido(globalThis.INVENTARIO) ? globalThis.INVENTARIO : null;
+const { obras = [], corte, fuente, anexo, anioPim, revisado } = inventario ?? {};
 const porId = new Map(obras.map(obra => [obra.infobras, obra]));
 const $ = id => document.getElementById(id);
 const cantidad = new Intl.NumberFormat("es-PE", { maximumFractionDigits: 2 });
@@ -9,7 +10,7 @@ const ordenarTexto = new Intl.Collator("es", { sensitivity: "base" }).compare;
 const tamPagina = 12;
 const sinDato = "Sin dato en el anexo";
 const fechaOficial = new Intl.DateTimeFormat("es-PE", { dateStyle: "long", timeZone: "UTC" });
-const fechaCorte = fechaOficial.format(new Date(corte));
+const fechaCorte = corte ? fechaOficial.format(new Date(corte)) : "";
 const filtros = ["q", "dep", "prov", "dist", "tipo", "avance", "orden"];
 const comunes = new Set(["en", "de", "del", "la", "las", "el", "los", "y"]);
 const etiquetas = {
@@ -17,10 +18,41 @@ const etiquetas = {
   avance: "Mayor avance",
   costo: "Mayor costo de obra",
 };
-const estados = { pagina: 1, resultados: [] };
-const iaLocal = location.protocol === "http:" && location.hostname === "127.0.0.1"
-  ? fetch("/api/ia").then(respuesta => respuesta.ok ? respuesta.json() : {}).then(datos => datos.disponible === true).catch(() => false)
+const estados = { pagina: 1, resultados: [], cerrandoFicha: false, descargando: false, copia: 0 };
+const iaLocal = inventario && location.protocol === "http:" && location.hostname === "127.0.0.1"
+  ? fetch("/api/ia", { signal: AbortSignal.timeout(3000) }).then(respuesta => respuesta.ok ? respuesta.json() : {}).then(datos => datos.disponible === true).catch(() => false)
   : Promise.resolve(false);
+
+function fechaISO(valor) {
+  if (typeof valor !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(valor)) return false;
+  const fecha = new Date(valor);
+  return Number.isFinite(fecha.getTime()) && fecha.toISOString().slice(0, 10) === valor;
+}
+
+function urlOficial(valor, dominio) {
+  if (typeof valor !== "string") return false;
+  try {
+    const url = new URL(valor);
+    return url.protocol === "https:" && url.host === dominio && !url.username && !url.password;
+  } catch {
+    return false;
+  }
+}
+
+function inventarioValido(datos) {
+  if (!datos || !fechaISO(datos.corte) || !urlOficial(datos.fuente, "www.gob.pe")
+      || !urlOficial(datos.anexo, "cdn.www.gob.pe")
+      || !Array.isArray(datos.obras) || !datos.obras.length) return false;
+  const codigos = new Set();
+  for (const obra of datos.obras) {
+    if (!obra || typeof obra.infobras !== "string" || !/^\d+$/.test(obra.infobras)
+        || codigos.has(obra.infobras) || typeof obra.obra !== "string"
+        || typeof obra.entidad !== "string" || typeof obra.departamento !== "string"
+        || (obra.cui != null && (typeof obra.cui !== "string" || !/^\d+$/.test(obra.cui)))) return false;
+    codigos.add(obra.infobras);
+  }
+  return true;
+}
 
 function normalizar(texto) {
   return String(texto ?? "").normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
@@ -78,7 +110,7 @@ function interpretarConsulta(texto) {
   const lugarSolicitado = separador < 0 ? cuerpo : cuerpo.slice(separador + 4);
   const ubicacion = lugares.has(lugarSolicitado) ? lugarSolicitado : null;
   const termino = ubicacion ? (separador < 0 ? "" : cuerpo.slice(0, separador)) : cuerpo;
-  return { campo: null, codigo: null, termino: palabras(termino).filter(palabra => !comunes.has(palabra)), ubicacion };
+  return { campo: null, codigo: null, termino: [...new Set(palabras(termino).filter(palabra => !comunes.has(palabra)))], ubicacion };
 }
 
 function opciones(select, texto, valores, preferido = select.value) {
@@ -119,8 +151,11 @@ function actualizarURL(codigo, abrirFicha = false) {
   // Los archivos abiertos directamente también permiten enlaces relativos con filtros.
   try {
     const url = location.pathname + sufijo;
-    if (abrirFicha) history.pushState({ fichaAbierta: true }, "", url);
-    else history.replaceState(null, "", url);
+    if (abrirFicha) {
+      history.pushState({ fichaAbierta: true }, "", url);
+    } else if (url !== location.pathname + location.search) {
+      history.replaceState(null, "", url);
+    }
   } catch {
     // Algunos navegadores restringen history en archivos locales.
   }
@@ -128,13 +163,19 @@ function actualizarURL(codigo, abrirFicha = false) {
 
 function buscar({ reiniciar = true, sincronizar = true } = {}) {
   if (reiniciar) estados.pagina = 1;
+  const q = $("q");
+  if (q.value.length > q.maxLength) q.value = q.value.slice(0, q.maxLength);
   const consulta = interpretarConsulta($("q").value);
   const avance = $("avance").value;
+  const dep = $("dep").value;
+  const prov = $("prov").value;
+  const dist = $("dist").value;
+  const tipo = $("tipo").value;
   const seleccion = obras.filter(obra => {
-    if ($("dep").value && obra.departamento !== $("dep").value) return false;
-    if ($("prov").value && obra.provincia !== $("prov").value) return false;
-    if ($("dist").value && obra.distrito !== $("dist").value) return false;
-    if ($("tipo").value && obra.tipo !== $("tipo").value) return false;
+    if (dep && obra.departamento !== dep) return false;
+    if (prov && obra.provincia !== prov) return false;
+    if (dist && obra.distrito !== dist) return false;
+    if (tipo && obra.tipo !== tipo) return false;
     if (avance === "sin" && obra.avance != null) return false;
     if (avance === "100" && obra.avance !== 100) return false;
     if (avance === "90" && (obra.avance == null || obra.avance < 90)) return false;
@@ -164,7 +205,7 @@ function renderizar() {
   const filas = estados.resultados.slice(desde, desde + tamPagina);
   $("conteo").textContent = `${cantidad.format(total)} ${total === 1 ? "obra encontrada" : "obras encontradas"}`
     + (total > tamPagina ? ` · Mostrando ${cantidad.format(desde + 1)}–${cantidad.format(desde + filas.length)}` : "");
-  $("descargar").disabled = !total;
+  $("descargar").disabled = !total || estados.descargando;
   $("lista").innerHTML = filas.length ? filas.map(obra => `
     <li class="resultado">
       <div>
@@ -187,13 +228,13 @@ function fuenteLink(url, texto) {
 
 function ficha(codigo, abrirFicha = true) {
   const obra = porId.get(codigo);
-  if (!obra) return;
+  if (!obra || estados.cerrandoFicha || (abrirFicha && $("ficha").open)) return;
   const campos = [
     ["Entidad registrada", obra.entidad],
     ["Nivel de gobierno", obra.nivel],
     ["Unidad orgánica de control", obra.organo],
     ["Avance físico reportado", porcentaje(obra.avance)],
-    ["Causal registrada", obra.causa?.replace(/^\d+\s+/, "")],
+    ["Causal registrada", obra.causa == null ? null : String(obra.causa).replace(/^\d+\s+/, "")],
     ["Modalidad de ejecución", obra.modalidad],
     ["Tipo de obra", obra.tipo],
     ["Categoría", obra.categoria],
@@ -205,8 +246,8 @@ function ficha(codigo, abrirFicha = true) {
     ["En lista priorizada", obra.priorizada],
   ];
   const documentos = [
-    obra.informe && fuenteLink(obra.informe, "Informe de estado situacional" + (obra.fechaInforme ? ` (${obra.fechaInforme})` : "")),
-    obra.resolucion && fuenteLink(obra.resolucion, "Resolución de priorización" + (obra.fechaResolucion ? ` (${obra.fechaResolucion})` : "")),
+    urlOficial(obra.informe, "ofi5.mef.gob.pe") && fuenteLink(obra.informe, "Informe de estado situacional" + (obra.fechaInforme ? ` (${obra.fechaInforme})` : "")),
+    urlOficial(obra.resolucion, "ofi5.mef.gob.pe") && fuenteLink(obra.resolucion, "Resolución de priorización" + (obra.fechaResolucion ? ` (${obra.fechaResolucion})` : "")),
     fuenteLink(anexo, `Anexo del inventario · fila ${obra.fila}`),
     fuenteLink("https://www.gob.pe/es/10795-conocer-el-estado-de-las-obras-publicas-en-todo-el-peru-infobras", "Consultar INFOBRAS por código"),
     obra.cui && fuenteLink("https://ofi5.mef.gob.pe/ssi/Ssi/Indexm", "Consultar MEF por CUI"),
@@ -242,6 +283,7 @@ function ficha(codigo, abrirFicha = true) {
   $("copiar-enlace").onclick = () => copiar(new URL(enlaceFicha(codigo), location.href).href);
   $("copiar-pedido").onclick = () => copiar($("pedido").value);
   configurarSugerencias(codigo);
+  $("cerrar-ficha").disabled = false;
   if (!$("ficha").open) $("ficha").showModal();
   $("ficha").scrollTop = 0;
   if (abrirFicha) actualizarURL(codigo, true);
@@ -261,32 +303,46 @@ function configurarSugerencias(codigo) {
         body: JSON.stringify({ infobras: codigo }), signal: AbortSignal.timeout(50000),
       });
       const datos = await respuesta.json();
-      if (!respuesta.ok) throw new Error(datos.error);
+      if (!respuesta.ok || !Array.isArray(datos.preguntas) || datos.preguntas.length !== 3
+          || datos.preguntas.some(texto => typeof texto !== "string" || !texto.trim())) {
+        throw new Error("Respuesta de IA no disponible.");
+      }
       const preguntas = datos.preguntas.map((texto, i) => `${i + 1}. ${texto}`).join("\n");
       borrador.value = `${borrador.value.trimEnd()}\n\nPreguntas de seguimiento\n${preguntas}`;
       estado.textContent = "Se añadieron tres preguntas. Revísalas antes de copiar el pedido.";
-    } catch (error) {
-      estado.textContent = error.message || "La IA no respondió. Puedes editar el borrador.";
+    } catch {
+      estado.textContent = "La IA no respondió. Puedes seguir editando el borrador o reintentar.";
       boton.disabled = false;
     }
   };
 }
 
 async function copiar(texto) {
+  const mensaje = $("mensaje");
+  const copia = ++estados.copia;
+  const vigente = () => copia === estados.copia && mensaje.isConnected && $("ficha").open;
   try {
     await navigator.clipboard.writeText(texto);
-    $("mensaje").textContent = "Copiado al portapapeles.";
+    if (vigente()) mensaje.textContent = "Copiado al portapapeles.";
   } catch {
+    if (!vigente()) return;
     const caja = document.createElement("textarea");
     caja.setAttribute("aria-label", "Texto para copiar");
     caja.readOnly = true;
     caja.value = texto;
-    $("mensaje").replaceChildren("Selecciona y copia el texto.", caja);
+    mensaje.replaceChildren("Selecciona y copia el texto.", caja);
     caja.select();
   }
 }
 
 function descargar() {
+  if (estados.descargando || !estados.resultados.length) return;
+  estados.descargando = true;
+  $("descargar").disabled = true;
+  setTimeout(() => {
+    estados.descargando = false;
+    $("descargar").disabled = !estados.resultados.length;
+  }, 400);
   const columnas = ["infobras", "cui", "obra", "entidad", "departamento", "provincia", "distrito",
     "tipo", "categoria", "subtipo", "avance", "modalidad", "causa", "organo", "costo", "pim",
     "informe", "resolucion", "fila", "corte", "fuente"];
@@ -306,18 +362,27 @@ function descargar() {
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
-$("fuente").href = fuente;
-$("anexo").href = anexo;
-$("corte-portada").dateTime = corte;
-$("corte-portada").textContent = `Perú · Corte al ${fechaCorte}`;
-$("corte-fuente").dateTime = corte;
-$("corte-fuente").textContent = fechaCorte;
-if (revisado) {
-  $("revision-fuente").textContent = `Última revisión de publicaciones de Contraloría: ${fechaOficial.format(new Date(revisado))}.`;
-  $("revision-fuente").hidden = false;
+function cerrarFicha() {
+  const dialogo = $("ficha");
+  if (!dialogo.open || estados.cerrandoFicha) return;
+  if (!history.state?.fichaAbierta || !new URLSearchParams(location.search).has("obra")) {
+    dialogo.close();
+    actualizarURL();
+    return;
+  }
+  estados.cerrandoFicha = true;
+  $("cerrar-ficha").disabled = true;
+  estados.esperaCierre = setTimeout(() => {
+    estados.cerrandoFicha = false;
+    dialogo.close();
+    actualizarURL();
+  }, 400);
+  history.back();
 }
 
 function leerURL() {
+  clearTimeout(estados.esperaCierre);
+  estados.cerrandoFicha = false;
   const params = new URLSearchParams(location.search);
   opciones($("dep"), "Todo el Perú", obras.map(obra => obra.departamento), params.get("dep"));
   actualizarUbicacion({ prov: params.get("prov"), dist: params.get("dist") });
@@ -330,42 +395,65 @@ function leerURL() {
   estados.pagina = Number.parseInt(params.get("pagina"), 10) || 1;
   buscar({ reiniciar: false, sincronizar: false });
   const codigo = params.get("obra");
+  $("aviso-ficha").hidden = !codigo || porId.has(codigo);
   if (porId.has(codigo)) ficha(codigo, false);
   else if ($("ficha").open) $("ficha").close();
 }
 
-leerURL();
-window.addEventListener("popstate", leerURL);
+function iniciarBuscador() {
+  $("fuente").href = fuente;
+  $("anexo").href = anexo;
+  $("corte-portada").dateTime = corte;
+  $("corte-portada").textContent = `Perú · Corte al ${fechaCorte}`;
+  $("corte-fuente").dateTime = corte;
+  $("corte-fuente").textContent = fechaCorte;
+  if (fechaISO(revisado)) {
+    $("revision-fuente").textContent = `Última revisión de publicaciones de Contraloría: ${fechaOficial.format(new Date(revisado))}.`;
+    $("revision-fuente").hidden = false;
+  }
+  leerURL();
+  window.addEventListener("popstate", leerURL);
+  const form = $("busqueda");
+  const aplicar = () => {
+    $("aviso-ficha").hidden = true;
+    buscar();
+  };
+  form.addEventListener("submit", evento => { evento.preventDefault(); aplicar(); });
+  $("q").addEventListener("input", aplicar);
+  $("dep").addEventListener("change", () => { actualizarUbicacion({ prov: "", dist: "" }); aplicar(); });
+  $("prov").addEventListener("change", () => { actualizarUbicacion({ dist: "" }); aplicar(); });
+  for (const id of ["dist", "tipo", "avance", "orden"]) $(id).addEventListener("change", aplicar);
+  $("limpiar").onclick = () => {
+    form.reset();
+    for (const id of ["dep", "tipo"]) $(id).value = "";
+    $("orden").value = "original";
+    actualizarUbicacion({ prov: "", dist: "" });
+    aplicar();
+    $("q").focus();
+  };
+  for (const [id, delta] of [["anterior", -1], ["siguiente", 1]]) $(id).onclick = () => {
+    estados.pagina += delta;
+    renderizar();
+    actualizarURL();
+    $("lista").querySelector("h3 a")?.focus({ preventScroll: true });
+    $("resultados").scrollIntoView();
+  };
+  $("lista").addEventListener("click", evento => {
+    const link = evento.target.closest("a[data-obra]");
+    if (!link || evento.metaKey || evento.ctrlKey || evento.shiftKey || evento.altKey) return;
+    evento.preventDefault();
+    ficha(link.dataset.obra);
+  });
+  $("cerrar-ficha").onclick = cerrarFicha;
+  $("ficha").addEventListener("cancel", evento => {
+    evento.preventDefault();
+    cerrarFicha();
+  });
+  $("descargar").onclick = descargar;
+  form.dataset.listo = "true";
+  $("controles-busqueda").disabled = false;
+  $("orden").disabled = false;
+  $("error-carga").hidden = true;
+}
 
-$("busqueda").addEventListener("submit", evento => { evento.preventDefault(); buscar(); });
-$("q").addEventListener("input", () => buscar());
-$("dep").addEventListener("change", () => { actualizarUbicacion({ prov: "", dist: "" }); buscar(); });
-$("prov").addEventListener("change", () => { actualizarUbicacion({ dist: "" }); buscar(); });
-for (const id of ["dist", "tipo", "avance", "orden"]) $(id).addEventListener("change", () => buscar());
-$("limpiar").onclick = () => {
-  $("busqueda").reset();
-  for (const id of ["dep", "tipo"]) $(id).value = "";
-  $("orden").value = "original";
-  actualizarUbicacion({ prov: "", dist: "" });
-  buscar();
-  $("q").focus();
-};
-for (const [id, delta] of [["anterior", -1], ["siguiente", 1]]) $(id).onclick = () => {
-  estados.pagina += delta;
-  renderizar();
-  actualizarURL();
-  $("lista").querySelector("h3 a")?.focus({ preventScroll: true });
-  $("resultados").scrollIntoView();
-};
-$("lista").addEventListener("click", evento => {
-  const link = evento.target.closest("a[data-obra]");
-  if (!link || evento.metaKey || evento.ctrlKey || evento.shiftKey || evento.altKey) return;
-  evento.preventDefault();
-  ficha(link.dataset.obra);
-});
-$("ficha").addEventListener("close", () => {
-  if (!new URLSearchParams(location.search).has("obra")) return;
-  if (history.state?.fichaAbierta) history.back();
-  else actualizarURL();
-});
-$("descargar").onclick = descargar;
+if (inventario) iniciarBuscador();

@@ -8,9 +8,11 @@ import re
 from datetime import date
 from io import BytesIO
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 from urllib.parse import urlsplit
 from urllib.request import urlopen
 from unicodedata import normalize
+from zipfile import BadZipFile, ZipFile
 
 from openpyxl import load_workbook
 from openpyxl.utils.datetime import from_excel
@@ -33,6 +35,9 @@ CAMPOS = {
     "priorizada": "dentro de la lista priorizada",
     "fechaResolucion": "fecha resolucion de lista priorizada", "resolucion": "url resolucion",
 }
+MAX_FILAS = 50_000
+MAX_COLUMNAS = 128
+MAX_XLSX_DESCOMPRIMIDO = 64 * 1024 * 1024
 
 
 def texto(valor):
@@ -90,11 +95,19 @@ def columnas(encabezados):
 
 
 def preparar(contenido, corte, fuente, anexo):
+    try:
+        with ZipFile(BytesIO(contenido)) as comprimido:
+            if sum(entrada.file_size for entrada in comprimido.infolist()) > MAX_XLSX_DESCOMPRIMIDO:
+                raise ValueError("El anexo supera el tamaño descomprimido permitido.")
+    except BadZipFile as error:
+        raise ValueError("El archivo descargado no es un XLSX válido.") from error
     libro = load_workbook(BytesIO(contenido), read_only=True, data_only=True)
     registros = []
     try:
         candidatas = []
         for hoja in libro:
+            if (hoja.max_row or 0) > MAX_FILAS + 1 or (hoja.max_column or 0) > MAX_COLUMNAS:
+                raise ValueError("El anexo excede las dimensiones esperadas para el inventario.")
             filas = iter(hoja.values)
             try:
                 indices, anio_pim = columnas(next(filas, ()))
@@ -109,6 +122,8 @@ def preparar(contenido, corte, fuente, anexo):
         codigos = set()
         fin = False
         for fila_excel, fila in enumerate(filas, start=2):
+            if fila_excel > MAX_FILAS + 1 or len(fila) > MAX_COLUMNAS:
+                raise ValueError("El anexo excede las dimensiones esperadas para el inventario.")
             if not any(texto(valor) is not None for valor in fila):
                 fin = True
                 continue
@@ -158,12 +173,18 @@ def leer_inventario():
 
 
 def guardar(datos):
-    temporal = SALIDA.with_suffix(".js.tmp")
-    temporal.write_text(
-        PREFIJO + json.dumps(datos, ensure_ascii=False, separators=(",", ":"), allow_nan=False) + ";\n",
-        encoding="utf-8",
-    )
-    temporal.replace(SALIDA)
+    temporal = None
+    try:
+        with NamedTemporaryFile(mode="w", encoding="utf-8", newline="\n", dir=SALIDA.parent,
+                                prefix=".inventario-", suffix=".tmp", delete=False) as archivo:
+            temporal = Path(archivo.name)
+            archivo.write(PREFIJO)
+            json.dump(datos, archivo, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
+            archivo.write(";\n")
+        temporal.replace(SALIDA)
+    finally:
+        if temporal:
+            temporal.unlink(missing_ok=True)
 
 
 if __name__ == "__main__":

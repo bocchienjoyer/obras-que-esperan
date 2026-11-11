@@ -47,7 +47,7 @@ El navegador consulta el inventario local. El servidor envía a Codex CLI solo e
 
 Para instalar el lector de anexos, ejecuta `python -m pip install -r requirements.txt`. [GitHub Actions](.github/workflows/actualizar-inventario.yml) revisa el [compendio oficial](https://www.gob.pe/institucion/contraloria/colecciones/18230-obras-paralizadas-documentos) los lunes alrededor de las 8:17 a. m. de Perú. Valida el XLSX y publica solo cortes posteriores. Si cambia el formato o falla la fuente, se conserva el último inventario publicado. La página muestra la fecha del corte y la última revisión del compendio. Para comprobar el origen sin modificar archivos, usa `python scripts/actualizar_inventario.py --comprobar`.
 
-Las pruebas de Python corren con `python -m unittest discover -s tests -v`. Para las pruebas de navegador, instala las dependencias con `npm install`, ejecuta `npx playwright install chromium` y luego `npm test`. La prueba que usa el modelo real se habilita con la variable `OBRAS_IA_REAL=1`.
+Las pruebas de Python corren con `python -m unittest discover -s tests -v`. Para las pruebas de navegador, instala las dependencias con `npm install`, ejecuta `npx playwright install chromium` y luego `npm test`. La suite incluye clics repetidos, 20.000 registros sintéticos, fallos de carga y reintento de la IA. Para Firefox, instala ese navegador con Playwright y define `OBRAS_MOTOR=firefox`. La prueba que usa el modelo real se habilita con `OBRAS_IA_REAL=1`.
 
 ## 7. Modelo de negocio
 

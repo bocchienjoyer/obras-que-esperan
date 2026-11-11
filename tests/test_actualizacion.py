@@ -1,14 +1,18 @@
 from datetime import date
 from io import BytesIO
+import json
 from pathlib import Path
 import sys
+from tempfile import TemporaryDirectory
 import unittest
+from unittest.mock import MagicMock, patch
+from urllib.error import HTTPError, URLError
 
 from openpyxl import Workbook
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from actualizar_inventario import COLECCION, actualizar, localizar_anexo, localizar_corte
-from preparar_datos import CAMPOS, FUENTE, preparar
+from actualizar_inventario import COLECCION, actualizar, descargar, localizar_anexo, localizar_corte, revisar_archivo
+from preparar_datos import CAMPOS, FUENTE, PREFIJO, guardar, preparar
 
 HOY = date(2026, 11, 10)
 NUEVO = "https://www.gob.pe/institucion/contraloria/informes-publicaciones/999-informe-de-obras-publicas-paralizadas-en-el-territorio-nacional-a-septiembre-de-2026"
@@ -84,3 +88,56 @@ class ActualizacionTest(unittest.TestCase):
             actualizar(self.actual, HOY, self.obtener(
                 (COLECCION, html(NUEVO)), (NUEVO, html(ANEXO)), (ANEXO, xlsx()),
             ))
+
+    def test_fallo_de_red_o_xlsx_corrupto_dejan_el_archivo_intacto(self):
+        original = PREFIJO + json.dumps(self.actual) + ";\n"
+
+        def fuera_de_linea(url, limite):
+            raise URLError("Sin conexión")
+
+        with TemporaryDirectory() as carpeta:
+            ruta = Path(carpeta) / "obras.js"
+            ruta.write_bytes(original.encode())
+            with patch("preparar_datos.SALIDA", ruta):
+                with self.assertRaises(URLError):
+                    revisar_archivo(HOY, obtener=fuera_de_linea)
+                with self.assertRaisesRegex(ValueError, "XLSX"):
+                    revisar_archivo(HOY, obtener=self.obtener(
+                        (COLECCION, html(NUEVO)), (NUEVO, html(ANEXO)),
+                        (ANEXO, b"<html>Servicio no disponible</html>"),
+                    ))
+            self.assertEqual(ruta.read_bytes(), original.encode())
+            self.assertEqual(list(Path(carpeta).iterdir()), [ruta])
+
+    def test_guardado_interrumpido_no_sobrescribe_el_inventario(self):
+        with TemporaryDirectory() as carpeta:
+            ruta = Path(carpeta) / "obras.js"
+            ruta.write_bytes(b"corte verificado")
+            with patch("preparar_datos.SALIDA", ruta), patch.object(Path, "replace", side_effect=PermissionError):
+                with self.assertRaises(PermissionError):
+                    guardar(self.actual)
+            self.assertEqual(ruta.read_bytes(), b"corte verificado")
+            self.assertEqual(list(Path(carpeta).iterdir()), [ruta])
+
+    def test_reintenta_errores_transitorios_con_limite(self):
+        fallo = HTTPError(COLECCION, 503, "No disponible", None, None)
+        abridor = MagicMock()
+        respuesta = abridor.open.return_value.__enter__.return_value
+        respuesta.geturl.return_value = COLECCION
+        respuesta.read.return_value = b"contenido oficial"
+        abridor.open.side_effect = [fallo, fallo, abridor.open.return_value]
+        with patch("actualizar_inventario.build_opener", return_value=abridor), patch("actualizar_inventario.sleep"):
+            self.assertEqual(descargar(COLECCION, 100), b"contenido oficial")
+            self.assertEqual(abridor.open.call_count, 3)
+            abridor.open.reset_mock(side_effect=True)
+            abridor.open.side_effect = fallo
+            with self.assertRaises(HTTPError):
+                descargar(COLECCION, 100)
+            self.assertEqual(abridor.open.call_count, 3)
+
+    def test_limita_el_tamano_descomprimido_y_las_columnas_del_xlsx(self):
+        anexo = xlsx()
+        for constante, valor in (("MAX_XLSX_DESCOMPRIMIDO", 5), ("MAX_COLUMNAS", 10), ("MAX_FILAS", 1)):
+            with patch(f"preparar_datos.{constante}", valor):
+                with self.assertRaises(ValueError):
+                    preparar(anexo, date(2026, 9, 30), NUEVO, ANEXO)

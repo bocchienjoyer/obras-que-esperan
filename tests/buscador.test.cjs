@@ -1,11 +1,12 @@
 const assert = require("node:assert/strict");
 const { spawn } = require("node:child_process");
 const { readFile } = require("node:fs/promises");
+const { createServer } = require("node:http");
 const { resolve } = require("node:path");
 const { createInterface } = require("node:readline");
 const { pathToFileURL } = require("node:url");
 const { after, before, test } = require("node:test");
-const { chromium } = require(process.env.OBRAS_PLAYWRIGHT || "playwright");
+const { chromium, firefox } = require(process.env.OBRAS_PLAYWRIGHT || "playwright");
 
 require("../dist/obras.js");
 const inventario = globalThis.INVENTARIO;
@@ -15,7 +16,8 @@ let browser;
 
 before(async () => {
   const executablePath = process.env.OBRAS_BROWSER;
-  browser = await chromium.launch(executablePath ? { executablePath } : {});
+  const motor = process.env.OBRAS_MOTOR === "firefox" ? firefox : chromium;
+  browser = await motor.launch(executablePath ? { executablePath } : {});
 });
 
 after(async () => {
@@ -42,6 +44,43 @@ async function esperarConteo(pagina, total) {
     const conteo = document.querySelector("#conteo").textContent;
     return conteo.split(" ")[0].replace(/\D/g, "") === String(n);
   }, total);
+}
+
+async function sitioDePrueba(rutas, prueba) {
+  const tipos = {
+    "/": ["index.html", "text/html; charset=utf-8"],
+    "/estilos.css": ["estilos.css", "text/css"],
+    "/buscador.js": ["buscador.js", "text/javascript; charset=utf-8"],
+    "/obras.js": ["obras.js", "text/javascript; charset=utf-8"],
+  };
+  const archivos = new Map(await Promise.all(Object.entries(tipos).map(async ([ruta, [nombre, tipo]]) => (
+    [ruta, { tipo, cuerpo: await readFile(resolve(__dirname, "../dist", nombre)) }]
+  ))));
+  const servidor = createServer(async (peticion, respuesta) => {
+    const ruta = new URL(peticion.url, "http://127.0.0.1").pathname;
+    const archivo = rutas[ruta] ? await rutas[ruta](peticion) : archivos.get(ruta);
+    respuesta.writeHead(archivo?.estado ?? (archivo ? 200 : 404), {
+      "Content-Type": archivo?.tipo ?? "text/plain",
+      "Cache-Control": "no-store",
+    });
+    respuesta.end(archivo?.cuerpo ?? "");
+  });
+  await new Promise(resolveInicio => servidor.listen(0, "127.0.0.1", resolveInicio));
+  try {
+    await prueba(`http://127.0.0.1:${servidor.address().port}/`);
+  } finally {
+    await new Promise(resolveCierre => {
+      servidor.close(resolveCierre);
+      servidor.closeAllConnections();
+    });
+  }
+}
+
+function scriptInventario(datos) {
+  return {
+    tipo: "text/javascript; charset=utf-8",
+    cuerpo: "globalThis.INVENTARIO = " + JSON.stringify(datos) + ";",
+  };
 }
 
 test("muestra el corte vigente y el total del inventario publicado", () => probar(async pagina => {
@@ -154,4 +193,168 @@ test("añade sugerencias de Codex al borrador sin perder ediciones", {
     salida.close();
     servidor.kill();
   }
+}));
+
+test("soporta 100 aperturas y cierres de ficha con pulsaciones repetidas", { timeout: 90000 }, () => probar(async pagina => {
+  await pagina.goto(local);
+  await esperarConteo(pagina, inventario.obras.length);
+  const consulta = `INFOBRAS ${inventario.obras[0].infobras}`;
+  await pagina.locator("#q").fill(consulta);
+  const abrir = pagina.locator("#lista h3 a");
+  const dialogo = pagina.locator("#ficha[open]");
+  for (let vuelta = 0; vuelta < 100; vuelta++) {
+    if (vuelta < 5) await abrir.click();
+    else await abrir.evaluate(enlace => { enlace.click(); enlace.click(); enlace.click(); });
+    await dialogo.waitFor();
+    if (vuelta % 10 === 0) {
+      await pagina.keyboard.press("Escape");
+    } else {
+      await pagina.locator("#cerrar-ficha").evaluate(boton => { boton.click(); boton.click(); boton.click(); });
+    }
+    await dialogo.waitFor({ state: "hidden" });
+  }
+  await pagina.waitForFunction(() => !new URLSearchParams(location.search).has("obra"));
+  assert.equal(await pagina.locator("#q").inputValue(), consulta);
+  await esperarConteo(pagina, 1);
+}));
+
+test("resiste 500 cambios de controles con 20.000 registros y una consulta enorme", { timeout: 45000 },
+  () => probar(async pagina => {
+    const obras = Array.from({ length: 20000 }, (_, i) => ({
+      ...inventario.obras[i % inventario.obras.length], infobras: String(9000000 + i), fila: i + 2,
+    }));
+    await sitioDePrueba({ "/obras.js": () => scriptInventario({ ...inventario, obras }) }, async url => {
+      await pagina.goto(url);
+      await esperarConteo(pagina, obras.length);
+      await pagina.evaluate(() => {
+        const buscar = document.getElementById("q");
+        const avance = document.getElementById("avance");
+        const cambiar = (elemento, evento) => elemento.dispatchEvent(new Event(evento, { bubbles: true }));
+        for (let vuelta = 0; vuelta < 100; vuelta++) {
+          buscar.value = "colegio ".repeat(25000);
+          cambiar(buscar, "input");
+          document.getElementById("limpiar").click();
+          avance.value = "100";
+          cambiar(avance, "change");
+          avance.value = "";
+          cambiar(avance, "change");
+          document.getElementById("siguiente").click();
+        }
+      });
+      await pagina.locator("#limpiar").click();
+      await esperarConteo(pagina, obras.length);
+      assert.equal(await pagina.locator(".resultado").count(), 12);
+      await pagina.locator("#q").fill("x".repeat(200000));
+      assert.equal((await pagina.locator("#q").inputValue()).length, 200);
+      await esperarConteo(pagina, 0);
+      assert.ok(await pagina.locator("#descargar").isDisabled());
+    });
+  }));
+
+test("informa el fallo y se recupera cuando reaparecen los datos o el buscador", () => probar(async pagina => {
+  let fallo = "datos";
+  const script = await readFile(resolve(__dirname, "../dist/buscador.js"));
+  await sitioDePrueba({
+    "/obras.js": () => fallo === "datos" ? { estado: 503 }
+      : scriptInventario(fallo === "invalido" ? { ...inventario, corte: "2026-02-30" } : inventario),
+    "/buscador.js": () => fallo === "buscador" ? { estado: 503 }
+      : { tipo: "text/javascript; charset=utf-8", cuerpo: script },
+  }, async url => {
+    for (const tipo of ["datos", "invalido", "buscador"]) {
+      fallo = tipo;
+      await pagina.goto(url);
+      await pagina.getByRole("alert").waitFor();
+      assert.match(await pagina.locator("#error-carga").innerText(), /Vuelve a cargar/);
+      assert.ok(await pagina.locator("#q").isDisabled());
+      assert.ok(await pagina.locator("#descargar").isDisabled());
+    }
+    fallo = "";
+    await pagina.getByRole("link", { name: "Vuelve a cargar la página" }).click();
+    await esperarConteo(pagina, inventario.obras.length);
+    assert.ok(await pagina.locator("#q").isEnabled());
+    assert.ok(await pagina.getByRole("alert").isHidden());
+  });
+}));
+
+test("avisa si la carga se queda colgada y permite seguir buscando después de recuperarse",
+  { timeout: 30000 }, () => probar(async pagina => {
+    let responder;
+    const espera = new Promise(resolveRespuesta => { responder = resolveRespuesta; });
+    await sitioDePrueba({ "/obras.js": async () => {
+      await espera;
+      return scriptInventario(inventario);
+    } }, async url => {
+      try {
+        await pagina.goto(url, { waitUntil: "commit" });
+        await pagina.getByRole("alert").waitFor({ timeout: 18000 });
+        assert.ok(await pagina.locator("#q").isDisabled());
+        responder();
+        await esperarConteo(pagina, inventario.obras.length);
+        assert.ok(await pagina.getByRole("alert").isHidden());
+        await pagina.context().setOffline(true);
+        await pagina.locator("#q").fill(`INFOBRAS ${inventario.obras[0].infobras}`);
+        await esperarConteo(pagina, 1);
+        await pagina.locator("#lista h3 a").click();
+        await pagina.locator("#ficha[open]").waitFor();
+      } finally {
+        responder();
+      }
+    });
+  }));
+
+test("tolera enlaces dañados, portapapeles bloqueado y ráfagas de descarga", () => probar(async pagina => {
+  await pagina.addInitScript(() => {
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText: () => Promise.reject(new Error("Portapapeles denegado")) },
+    });
+  });
+  await pagina.goto(local + "?dep=inexistente&avance=101&pagina=9999999999999999999&obra=0");
+  assert.ok(await pagina.locator("#aviso-ficha").isVisible());
+  assert.ok(await pagina.locator("#siguiente").isDisabled());
+  await pagina.locator("#q").fill(`INFOBRAS ${inventario.obras[0].infobras}`);
+  assert.ok(await pagina.locator("#aviso-ficha").isHidden());
+  let descargas = 0;
+  pagina.on("download", () => descargas++);
+  const [descarga] = await Promise.all([
+    pagina.waitForEvent("download"),
+    pagina.locator("#descargar").evaluate(boton => {
+      for (let i = 0; i < 100; i++) boton.click();
+    }),
+  ]);
+  const contenido = await readFile(await descarga.path(), "utf8");
+  assert.equal(contenido.trimEnd().split(/\r?\n/).length, 2);
+  await pagina.locator("#lista h3 a").click();
+  await pagina.locator("#copiar-enlace").click();
+  const enlace = await pagina.getByRole("textbox", { name: "Texto para copiar" }).inputValue();
+  assert.match(enlace, /[?&]obra=\d+/);
+  await pagina.locator("#cerrar-ficha").click();
+  await pagina.waitForFunction(() => !document.querySelector("#descargar").disabled);
+  assert.equal(descargas, 1);
+}));
+
+test("si la IA devuelve un error, permite reintentar sin perder el borrador", () => probar(async pagina => {
+  let solicitudes = 0;
+  const json = (estado, datos) => ({ estado, tipo: "application/json", cuerpo: JSON.stringify(datos) });
+  await sitioDePrueba({
+    "/api/ia": peticion => {
+      if (peticion.method === "GET") return json(200, { disponible: true });
+      if (++solicitudes === 1) return json(503, { error: "No disponible" });
+      return json(200, { preguntas: ["Primera pregunta", "Segunda pregunta", "Tercera pregunta"] });
+    },
+  }, async url => {
+    await pagina.goto(url + "?obra=" + inventario.obras[0].infobras);
+    await pagina.locator("#ficha summary").click();
+    const borrador = pagina.locator("#pedido");
+    const boton = pagina.locator("#sugerir-preguntas");
+    await borrador.fill("Texto importante.");
+    await boton.waitFor({ state: "visible" });
+    await boton.evaluate(control => { for (let i = 0; i < 20; i++) control.click(); });
+    await pagina.getByText("La IA no respondió.", { exact: false }).waitFor();
+    assert.equal(await borrador.inputValue(), "Texto importante.");
+    assert.equal(solicitudes, 1);
+    await boton.click();
+    await pagina.getByText("Se añadieron tres preguntas.", { exact: false }).waitFor();
+    assert.match(await borrador.inputValue(), /^Texto importante\./);
+    assert.equal(solicitudes, 2);
+  });
 }));

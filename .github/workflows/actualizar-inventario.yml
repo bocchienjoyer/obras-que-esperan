@@ -4,6 +4,15 @@ on:
   schedule:
     - cron: "17 13 * * 1"
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "dist/index.html"
+      - "dist/buscador.js"
+      - "dist/estilos.css"
+      - "scripts/**"
+      - "tests/test_actualizacion.py"
+      - ".github/workflows/actualizar-inventario.yml"
 
 concurrency:
   group: publicar-inventario
@@ -31,6 +40,10 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_actualizacion.py' -v
       - name: Consultar Contraloría
         run: python scripts/actualizar_inventario.py
+      - name: Comprobar los archivos del buscador
+        run: |
+          node --check dist/obras.js
+          node --check dist/buscador.js
       - name: Registrar el inventario verificado
         run: |
           if ! git diff --quiet -- dist/obras.js; then

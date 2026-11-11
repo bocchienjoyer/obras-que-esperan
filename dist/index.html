@@ -7,9 +7,21 @@
   <meta name="theme-color" content="#152927">
   <title>Obras que esperan · Buscador de obras paralizadas</title>
   <link rel="icon" href="favicon.ico">
-  <link rel="stylesheet" href="estilos.css">
+  <link rel="stylesheet" href="estilos.css?v=20261110">
   <script defer src="obras.js"></script>
-  <script defer src="buscador.js"></script>
+  <script defer src="buscador.js?v=20261110"></script>
+  <script>
+    function mostrarErrorInventario() {
+      if (document.getElementById("busqueda")?.dataset.listo) return;
+      const conteo = document.getElementById("conteo");
+      const aviso = document.getElementById("error-carga");
+      if (!conteo || !aviso) return;
+      conteo.textContent = "El inventario no está disponible.";
+      aviso.hidden = false;
+    }
+    window.addEventListener("load", mostrarErrorInventario, { once: true });
+    window.setTimeout(mostrarErrorInventario, 12000);
+  </script>
 </head>
 <body>
   <a class="skip" href="#busqueda">Ir al buscador</a>
@@ -26,24 +38,26 @@
   </header>
   <main class="wrap">
     <form id="busqueda" role="search" aria-label="Buscar obras paralizadas">
-      <label class="consulta">Busca por obra, entidad, lugar, CUI o código INFOBRAS
-        <input id="q" type="search" placeholder="Ej. ¿Cuántas obras hay en Echarate?, colegio en Cusco, CUI 2100376">
-      </label>
-      <div class="filtros">
-        <label>Departamento<select id="dep"></select></label>
-        <label>Provincia<select id="prov"></select></label>
-        <label>Distrito<select id="dist"></select></label>
-        <label>Tipo de obra<select id="tipo"></select></label>
-        <label>Avance físico<select id="avance">
-          <option value="">Cualquier avance</option>
-          <option value="90">Desde 90 %</option>
-          <option value="100">100 % reportado</option>
-          <option value="sin">Sin dato</option>
-        </select></label>
-      </div>
-      <div class="form-actions">
-        <button class="text-button" id="limpiar" type="button">Limpiar filtros</button>
-      </div>
+      <fieldset id="controles-busqueda" disabled>
+        <label class="consulta">Busca por obra, entidad, lugar, CUI o código INFOBRAS
+          <input id="q" type="search" maxlength="200" placeholder="Ej. ¿Cuántas obras hay en Echarate?, colegio en Cusco, CUI 2100376">
+        </label>
+        <div class="filtros">
+          <label>Departamento<select id="dep"></select></label>
+          <label>Provincia<select id="prov"></select></label>
+          <label>Distrito<select id="dist"></select></label>
+          <label>Tipo de obra<select id="tipo"></select></label>
+          <label>Avance físico<select id="avance">
+            <option value="">Cualquier avance</option>
+            <option value="90">Desde 90 %</option>
+            <option value="100">100 % reportado</option>
+            <option value="sin">Sin dato</option>
+          </select></label>
+        </div>
+        <div class="form-actions">
+          <button class="text-button" id="limpiar" type="button">Limpiar filtros</button>
+        </div>
+      </fieldset>
     </form>
     <section id="resultados" aria-labelledby="titulo-resultados">
       <div class="results-head">
@@ -51,8 +65,10 @@
         <button id="descargar" type="button" class="button secondary" disabled>Descargar CSV</button>
       </div>
       <div class="sort-row">
-        <label>Ordenar por <select id="orden"><option value="original">Orden del anexo</option><option value="avance">Mayor avance</option><option value="costo">Mayor costo de obra</option></select></label>
+        <label>Ordenar por <select id="orden" disabled><option value="original">Orden del anexo</option><option value="avance">Mayor avance</option><option value="costo">Mayor costo de obra</option></select></label>
       </div>
+      <p id="error-carga" class="vacio" role="alert" hidden>El inventario no pudo cargarse. <a href="">Vuelve a cargar la página</a> o consulta el <a href="https://www.gob.pe/institucion/contraloria/colecciones/18230-obras-paralizadas-documentos">compendio oficial</a>.</p>
+      <p id="aviso-ficha" class="nota" role="status" hidden>El código de esta ficha no está en el corte disponible. Puedes buscar otra obra.</p>
       <ul id="lista" class="lista" aria-label="Obras encontradas"></ul>
       <nav id="paginacion" class="pagination" aria-label="Páginas de resultados" hidden>
         <button id="anterior" type="button" class="button secondary">Anterior</button>
@@ -71,7 +87,7 @@
   <dialog id="ficha" aria-labelledby="nombre-ficha">
     <div class="ficha-top">
       <span>Ficha de obra</span>
-      <form method="dialog"><button class="button secondary" value="cerrar" autofocus>Cerrar</button></form>
+      <button id="cerrar-ficha" class="button secondary" type="button" autofocus>Cerrar</button>
     </div>
     <article id="detalle"></article>
   </dialog>

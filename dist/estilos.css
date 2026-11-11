@@ -21,6 +21,7 @@ button:disabled{opacity:.45;cursor:default}
 .corte{display:flex;align-items:center;gap:9px;color:#dfebc0;font-size:.86rem;margin:0}
 .corte span{width:8px;height:8px;border-radius:50%;background:#c9db90}
 #busqueda{position:relative;margin-top:-32px;background:white;border:1px solid var(--linea);border-radius:14px;padding:20px;box-shadow:0 6px 19px #112e2210}
+#controles-busqueda{border:0;margin:0;padding:0;min-width:0}
 label{display:grid;gap:6px;font-size:.87rem;font-weight:680}
 input,select,textarea{min-width:0;width:100%;color:var(--tinta);background:#fff;border:1px solid #a6b4ad;border-radius:7px;padding:9px}
 input[type=search]{padding:12px;font-size:1rem}

@@ -6,6 +6,8 @@ from datetime import date, datetime, timedelta, timezone
 from html.parser import HTMLParser
 from pathlib import PurePosixPath
 import re
+from time import sleep
+from urllib.error import HTTPError, URLError
 from urllib.parse import unquote, urljoin, urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
@@ -42,12 +44,20 @@ class RedireccionOficial(HTTPRedirectHandler):
 def descargar(url, limite):
     destino_oficial(url)
     peticion = Request(url, headers={"User-Agent": "Obras-que-esperan/1.0 (inventario oficial)"})
-    with build_opener(RedireccionOficial()).open(peticion, timeout=25) as respuesta:
-        destino_oficial(respuesta.geturl())
-        contenido = respuesta.read(limite + 1)
-    if not contenido or len(contenido) > limite:
-        raise ValueError("Respuesta oficial vacía o demasiado grande para el formato esperado.")
-    return contenido
+    abridor = build_opener(RedireccionOficial())
+    for intento in range(3):
+        try:
+            with abridor.open(peticion, timeout=25) as respuesta:
+                destino_oficial(respuesta.geturl())
+                contenido = respuesta.read(limite + 1)
+            if not contenido or len(contenido) > limite:
+                raise ValueError("Respuesta oficial vacía o demasiado grande para el formato esperado.")
+            return contenido
+        except (URLError, TimeoutError) as error:
+            transitorio = not isinstance(error, HTTPError) or error.code in (408, 429, 500, 502, 503, 504)
+            if intento == 2 or not transitorio:
+                raise
+            sleep(2 ** intento)
 
 
 class Enlaces(HTMLParser):
@@ -127,11 +137,15 @@ def actualizar(actual, hoy, obtener=descargar):
     return {**datos, "revisado": hoy.isoformat()}
 
 
+def revisar_archivo(hoy, comprobar=False, obtener=descargar):
+    actual = leer_inventario()
+    datos = actualizar(actual, hoy, obtener)
+    if datos != actual and not comprobar:
+        guardar(datos)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--comprobar", action="store_true", help="Valida sin guardar cambios.")
     args = parser.parse_args()
-    actual = leer_inventario()
-    datos = actualizar(actual, datetime.now(HORA_PERU).date())
-    if datos != actual and not args.comprobar:
-        guardar(datos)
+    revisar_archivo(datetime.now(HORA_PERU).date(), args.comprobar)
