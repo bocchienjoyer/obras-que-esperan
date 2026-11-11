@@ -10,7 +10,7 @@ José Navarro. El producto parte de una investigación sobre obras paralizadas e
 
 ## 3. Problema
 
-Para investigar las obras paralizadas en un distrito hay que filtrar el inventario, identificar cada obra y ubicar documentos en distintos sistemas. La evidencia sobre el tiempo que toma hoy ese trabajo se recogerá en tres conversaciones con usuarios. [Guía de entrevistas](docs/research/README.md)
+Periodistas, investigadores y estudiantes que investigan una obra paralizada tienen que filtrar el anexo de Contraloría, identificar la entidad registrada y seguir los códigos en INFOBRAS y el MEF. Cada consulta implica cotejar registros entre esas fuentes. Está pendiente medir el tiempo y documentar tres conversaciones con usuarios potenciales. [Guía de entrevistas](docs/research/README.md)
 
 ## 4. Solución e insight
 
@@ -18,7 +18,7 @@ Un buscador territorial responde cuántas obras aparecen en el corte y cuáles s
 
 ## 5. Why now
 
-La Contraloría publica el inventario en formato reutilizable y lo vincula con documentación de Invierte.pe. El código INFOBRAS identifica la obra y el CUI facilita continuar la búsqueda de la inversión. La fecha de corte acompaña cada ficha y exportación.
+El insumo para este producto es el anexo descargable del corte de junio de 2026. Sus códigos INFOBRAS y CUI permiten conectar el inventario de Contraloría con los portales oficiales. Los cortes anteriores ya existían. Hoy la revisión automatizada del compendio permite incorporar publicaciones posteriores, y el modelo con salida estructurada ayuda a preparar preguntas para solicitar información más reciente. La fecha de corte acompaña cada ficha y exportación.
 
 ## 6. Demo
 
@@ -43,7 +43,7 @@ flowchart LR
   G --> H[Preguntas para el borrador]
 ```
 
-El navegador consulta el inventario local. El servidor envía a Codex CLI solo el avance y los indicadores del anexo necesarios para ordenar preguntas predefinidas. Los identificadores, cifras y citas de la ficha se mantienen en el navegador. El modelo sugiere tres claves de una lista cerrada y el servidor valida que sean distintas.
+El navegador consulta el inventario local. El servidor usa el modelo predeterminado de Codex CLI con salida JSON estructurada para escoger preguntas de un catálogo cerrado. Le envía el avance y los indicadores del anexo necesarios para esa selección. Los identificadores, cifras y citas de la ficha se mantienen en el navegador. El modelo sugiere tres claves de una lista cerrada y el servidor valida que sean distintas.
 
 Para instalar el lector de anexos, ejecuta `python -m pip install -r requirements.txt`. [GitHub Actions](.github/workflows/actualizar-inventario.yml) revisa el [compendio oficial](https://www.gob.pe/institucion/contraloria/colecciones/18230-obras-paralizadas-documentos) los lunes alrededor de las 8:17 a. m. de Perú. Valida el XLSX y publica solo cortes posteriores. Si cambia el formato o falla la fuente, se conserva el último inventario publicado. La página muestra la fecha del corte y la última revisión del compendio. Para comprobar el origen sin modificar archivos, usa `python scripts/actualizar_inventario.py --comprobar`.
 
@@ -51,7 +51,7 @@ Las pruebas de Python corren con `python -m unittest discover -s tests -v`. Para
 
 ## 7. Modelo de negocio
 
-Hipótesis por validar: búsqueda abierta y suscripción institucional de S/49 mensuales por alertas de nuevos cortes y seguimiento de obras guardadas. La búsqueda y la exportación usan cero tokens. La generación de preguntas consume una llamada de la sesión de Codex del usuario. El alojamiento sirve archivos estáticos y las alertas son una hipótesis de producto.
+La búsqueda es abierta. La hipótesis de pago es S/49 al mes por institución, dirigida a redacciones y organizaciones de investigación que quieran recibir alertas de nuevos cortes y seguir obras guardadas. Las alertas y el seguimiento son funciones propuestas. En el prototipo, buscar y exportar usa 0 tokens y el alojamiento estático actual en GitHub Pages tiene un costo directo de S/0 por usuario. Cada solicitud de preguntas hace una llamada al modelo de la sesión local de Codex del usuario. Su consumo en tokens todavía está por medir. El costo de alojar las alertas también queda por estimar.
 
 ## 8. Herramientas del curso
 
