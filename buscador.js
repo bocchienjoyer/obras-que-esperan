@@ -26,6 +26,10 @@ function palabras(texto) {
   return normalizar(texto).match(/[a-z0-9]+/g) ?? [];
 }
 
+function claveTerritorial(texto) {
+  return palabras(texto).join(" ");
+}
+
 function entidadHtml(texto) {
   return String(texto ?? sinDato).replace(/[&<>"']/g, letra => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
@@ -44,13 +48,34 @@ function soles(valor) {
   return valor == null ? sinDato : moneda.format(valor);
 }
 
-const indice = new Map(obras.map(obra => [
-  obra.infobras,
-  {
-    texto: normalizar([obra.obra, obra.entidad, lugar(obra), obra.tipo, obra.sector].join(" ")),
-    codigos: [obra.infobras, obra.cui],
-  },
-]));
+const lugares = new Set();
+const indice = new Map(obras.map(obra => {
+  const ubicaciones = [obra.departamento, obra.provincia, obra.distrito]
+    .filter(Boolean).map(claveTerritorial);
+  for (const nombre of ubicaciones) lugares.add(nombre);
+  return [obra.infobras, {
+    texto: normalizar([
+      obra.obra, obra.entidad, lugar(obra), obra.tipo, obra.categoria, obra.subtipo, obra.sector,
+    ].join(" ")),
+    ubicaciones,
+  }];
+}));
+
+function interpretarConsulta(texto) {
+  const consulta = claveTerritorial(texto);
+  const codigo = consulta.match(/^(?:(?:codigo )?(cui|infobras) )?(\d+)$/);
+  if (codigo) {
+    return { campo: codigo[1], codigo: codigo[2], termino: [], ubicacion: null };
+  }
+  const cuerpo = consulta
+    .replace(/^(?:(?:cuant(?:as|os)|cual(?:es)?(?: son)?|que) )?(?:las )?obras(?: publicas)?(?: (?:estan )?paralizadas)?(?: hay)?(?: |$)/, "")
+    .replace(/^en /, "");
+  const separador = cuerpo.lastIndexOf(" en ");
+  const lugarSolicitado = separador < 0 ? cuerpo : cuerpo.slice(separador + 4);
+  const ubicacion = lugares.has(lugarSolicitado) ? lugarSolicitado : null;
+  const termino = ubicacion ? (separador < 0 ? "" : cuerpo.slice(0, separador)) : cuerpo;
+  return { campo: null, codigo: null, termino: palabras(termino).filter(palabra => !comunes.has(palabra)), ubicacion };
+}
 
 function opciones(select, texto, valores, preferido = select.value) {
   const unicos = [...new Set(valores.filter(Boolean))].sort(ordenarTexto);
@@ -97,7 +122,7 @@ function actualizarURL(codigo) {
 
 function buscar({ reiniciar = true, sincronizar = true } = {}) {
   if (reiniciar) estados.pagina = 1;
-  const palabrasConsulta = palabras($("q").value).filter(palabra => !comunes.has(palabra));
+  const consulta = interpretarConsulta($("q").value);
   const avance = $("avance").value;
   const seleccion = obras.filter(obra => {
     if ($("dep").value && obra.departamento !== $("dep").value) return false;
@@ -107,9 +132,14 @@ function buscar({ reiniciar = true, sincronizar = true } = {}) {
     if (avance === "sin" && obra.avance != null) return false;
     if (avance === "100" && obra.avance !== 100) return false;
     if (avance === "90" && (obra.avance == null || obra.avance < 90)) return false;
+    if (consulta.codigo) {
+      return consulta.campo ? obra[consulta.campo] === consulta.codigo
+        : obra.infobras === consulta.codigo || obra.cui === consulta.codigo;
+    }
     const entrada = indice.get(obra.infobras);
-    return palabrasConsulta.every(palabra =>
-      entrada.codigos.includes(palabra) || entrada.texto.includes(palabra));
+    if (consulta.ubicacion && !entrada.ubicaciones.includes(consulta.ubicacion)) return false;
+    return consulta.termino.every(palabra =>
+      entrada.texto.includes(palabra) || obra.infobras === palabra || obra.cui === palabra);
   });
   const orden = $("orden").value;
   if (orden === "avance" || orden === "costo") {
@@ -160,6 +190,8 @@ function ficha(codigo) {
     ["Causal registrada", obra.causa?.replace(/^\d+\s+/, "")],
     ["Modalidad de ejecución", obra.modalidad],
     ["Tipo de obra", obra.tipo],
+    ["Categoría", obra.categoria],
+    ["Subtipo", obra.subtipo],
     ["Año de inicio", obra.inicio],
     ["Costo de obra según expediente (INFOBRAS)", soles(obra.costo)],
     ["PIM de la inversión para 2026", obra.cui ? soles(obra.pim) : "Sin CUI asociado"],
@@ -181,7 +213,7 @@ function ficha(codigo) {
       `<div><dt>${entidadHtml(nombre)}</dt><dd>${entidadHtml(valor)}</dd></div>`).join("")}</dl>
     <h3>Documentos y consultas oficiales</h3>
     <ul>${documentos.map(link => `<li>${link}</li>`).join("")}</ul>
-    <p class="nota">La entidad y la unidad de control son las que figuran en el anexo. La ficha permite ubicar a quién consultar sobre la obra y su situación actual.</p>
+    <p class="nota">La entidad y la unidad de control son las que figuran en el anexo. Si un documento externo no abre, consulta INFOBRAS con el código de la obra o el MEF con el CUI.</p>
     <div class="acciones">
       <button type="button" class="button" id="copiar-cita">Copiar referencia</button>
       <button type="button" class="button secondary" id="copiar-enlace">Copiar enlace a la ficha</button>
@@ -192,7 +224,7 @@ function ficha(codigo) {
       <textarea id="pedido" rows="6"></textarea>
       <button type="button" class="button secondary" id="copiar-pedido">Copiar pedido</button>
     </details>
-    <p id="mensaje" role="status"></p>`;
+    <div id="mensaje" role="status"></div>`;
   const id = `INFOBRAS ${obra.infobras}${obra.cui ? `, CUI ${obra.cui}` : ""}`;
   $("pedido").value = `A ${obra.entidad ?? "la entidad a cargo"}:\n\nSolicito información sobre la obra «${obra.obra}» (${id}), incluida en el Anexo 1 de Contraloría al ${fechaCorte}. Agradeceré indicar el estado actual de la obra y facilitar copia del último informe de estado situacional, del acta de recepción si existe y de los documentos que acrediten su puesta en servicio o las acciones previstas para concluirla.\n\nFuente: ${fuente}`;
   const referencia = `Contraloría General de la República. Obras públicas paralizadas al ${fechaCorte}, Anexo 1, fila ${obra.fila}. «${obra.obra}» (${id}). ${fuente}`;
@@ -220,14 +252,16 @@ async function copiar(texto) {
 
 function descargar() {
   const columnas = ["infobras", "cui", "obra", "entidad", "departamento", "provincia", "distrito",
-    "tipo", "avance", "modalidad", "causa", "organo", "costo", "pim", "informe", "resolucion", "fila", "corte", "fuente"];
+    "tipo", "categoria", "subtipo", "avance", "modalidad", "causa", "organo", "costo", "pim",
+    "informe", "resolucion", "fila", "corte", "fuente"];
   const celda = valor => {
     const texto = String(valor ?? "");
     const seguro = typeof valor === "string" && /^[\s]*[=+\-@]/.test(texto) ? "'" + texto : texto;
     return '"' + seguro.replace(/"/g, '""') + '"';
   };
   const filas = estados.resultados.map(obra => columnas.map(clave =>
-    celda(clave === "corte" ? corte : clave === "fuente" ? fuente : obra[clave])).join(","));
+    celda(clave === "corte" ? corte : clave === "fuente" ? fuente :
+      clave === "pim" && !obra.cui ? null : obra[clave])).join(","));
   const url = URL.createObjectURL(new Blob(["\ufeff", [columnas.join(","), ...filas].join("\r\n")], { type: "text/csv;charset=utf-8" }));
   const link = document.createElement("a");
   link.href = url;
