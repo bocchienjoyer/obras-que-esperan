@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="description" content="Busca obras públicas paralizadas en el Perú y consulta su entidad, avance y documentos oficiales.">
-  <meta name="theme-color" content="#152927">
+  <meta name="theme-color" content="#18263d">
   <title>Obras que esperan · Buscador de obras paralizadas</title>
   <link rel="icon" href="favicon.ico">
   <link rel="stylesheet" href="estilos.css?v=editorial">
@@ -28,16 +28,13 @@
 <body>
   <a class="skip" href="#busqueda">Ir al buscador</a>
   <header class="top">
-    <div class="masthead">
-      <div class="wrap topline">
-        <a class="marca" href="index.html" aria-label="Obras que esperan, inicio"><span class="marca-icono" aria-hidden="true"></span>Obras que esperan</a>
-        <nav aria-label="Principal"><a href="#fuentes">Fuentes y metodología</a></nav>
-      </div>
-    </div>
     <div class="wrap intro">
       <div class="intro-texto">
-        <h1>¿Qué obras están paralizadas?</h1>
-        <p>Encuentra obras públicas por lugar, identifica la entidad a cargo y consulta la documentación oficial.</p>
+        <div class="intro-titulo">
+          <span class="puente" aria-hidden="true"></span>
+          <h1>Obras que esperan</h1>
+        </div>
+        <p>Encuentra obras públicas paralizadas por lugar, identifica la entidad a cargo y consulta la documentación oficial.</p>
       </div>
       <dl class="corte">
         <dt>Corte del inventario en Perú</dt>
@@ -82,7 +79,7 @@
               <div><h2 id="titulo-resultados">Obras en el corte</h2><p id="conteo" role="status">Cargando el inventario…</p></div>
               <div class="resultados-herramientas">
                 <div class="sort-row">
-                  <label>Ordenar por <select id="orden" disabled><option value="original">Orden del anexo</option><option value="avance">Mayor avance</option><option value="costo">Mayor costo de obra</option></select></label>
+                  <label>Ordenar por <select id="orden" disabled><option value="nombre">Nombre de la obra (A a Z)</option><option value="original">Orden de la fuente</option><option value="avance">Mayor avance</option><option value="costo">Mayor costo de obra</option></select></label>
                 </div>
                 <button id="descargar" type="button" class="button secondary" disabled>Descargar CSV</button>
               </div>

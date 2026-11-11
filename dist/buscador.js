@@ -7,17 +7,16 @@ const $ = id => document.getElementById(id);
 const cantidad = new Intl.NumberFormat("es-PE", { maximumFractionDigits: 2 });
 const moneda = new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN" });
 const ordenarTexto = new Intl.Collator("es", { sensitivity: "base" }).compare;
+const compararNombres = new Intl.Collator("es", { sensitivity: "base", ignorePunctuation: true }).compare;
+const obrasPorNombre = [...obras].sort((a, b) => compararNombres(a.obra, b.obra) || a.fila - b.fila);
+const ordenInicial = "nombre";
 const tamPagina = 12;
 const sinDato = "Sin dato en el anexo";
 const fechaOficial = new Intl.DateTimeFormat("es-PE", { dateStyle: "long", timeZone: "UTC" });
 const fechaCorte = corte ? fechaOficial.format(new Date(corte)) : "";
 const filtros = ["q", "dep", "prov", "dist", "tipo", "avance", "orden"];
 const comunes = new Set(["en", "de", "del", "la", "las", "el", "los", "y"]);
-const etiquetas = {
-  original: "Orden del anexo",
-  avance: "Mayor avance",
-  costo: "Mayor costo de obra",
-};
+const ordenes = new Set([ordenInicial, "original", "avance", "costo"]);
 const estados = { pagina: 1, resultados: [], cerrandoFicha: false, descargando: false, copia: 0 };
 const iaLocal = inventario && location.protocol === "http:" && location.hostname === "127.0.0.1"
   ? fetch("/api/ia", { signal: AbortSignal.timeout(3000) }).then(respuesta => respuesta.ok ? respuesta.json() : {}).then(datos => datos.disponible === true).catch(() => false)
@@ -132,7 +131,7 @@ function paramsBusqueda() {
   const params = new URLSearchParams();
   for (const id of filtros) {
     const valor = $(id).value.trim();
-    if (valor && !(id === "orden" && valor === "original")) params.set(id, valor);
+    if (valor && !(id === "orden" && valor === ordenInicial)) params.set(id, valor);
   }
   if (estados.pagina > 1) params.set("pagina", estados.pagina);
   return params;
@@ -171,7 +170,8 @@ function buscar({ reiniciar = true, sincronizar = true } = {}) {
   const prov = $("prov").value;
   const dist = $("dist").value;
   const tipo = $("tipo").value;
-  const seleccion = obras.filter(obra => {
+  const orden = $("orden").value;
+  const seleccion = (orden === ordenInicial ? obrasPorNombre : obras).filter(obra => {
     if (dep && obra.departamento !== dep) return false;
     if (prov && obra.provincia !== prov) return false;
     if (dist && obra.distrito !== dist) return false;
@@ -188,13 +188,18 @@ function buscar({ reiniciar = true, sincronizar = true } = {}) {
     return consulta.termino.every(palabra =>
       entrada.texto.includes(palabra) || obra.infobras === palabra || obra.cui === palabra);
   });
-  const orden = $("orden").value;
   if (orden === "avance" || orden === "costo") {
     seleccion.sort((a, b) => (b[orden] ?? -Infinity) - (a[orden] ?? -Infinity) || a.fila - b.fila);
   }
   estados.resultados = seleccion;
   renderizar();
   if (sincronizar) actualizarURL();
+}
+
+function claseAvance(avance) {
+  if (avance < 40) return "avance-bajo";
+  if (avance < 80) return "avance-medio";
+  return "avance-alto";
 }
 
 function renderizar() {
@@ -217,7 +222,7 @@ function renderizar() {
       <div class="dato">
         <span class="dato-etiqueta">Avance físico</span>
         <strong>${obra.avance == null ? "—" : porcentaje(obra.avance)}</strong>
-        ${Number.isFinite(obra.avance) ? `<progress aria-hidden="true" value="${obra.avance}" max="100"></progress>` : ""}
+        ${Number.isFinite(obra.avance) ? `<progress class="${claseAvance(obra.avance)}" aria-hidden="true" value="${obra.avance}" max="100"></progress>` : ""}
         <a data-obra="${obra.infobras}" href="${entidadHtml(enlaceFicha(obra.infobras))}" aria-label="Ver ficha INFOBRAS ${obra.infobras}">Ver ficha</a>
       </div>
     </li>`).join("") : '<li class="vacio">No hay coincidencias en este corte. Prueba con otro nombre o amplía la ubicación.</li>';
@@ -396,7 +401,7 @@ function leerURL() {
   const avance = params.get("avance");
   $("avance").value = ["90", "100", "sin"].includes(avance) ? avance : "";
   const orden = params.get("orden");
-  $("orden").value = Object.hasOwn(etiquetas, orden) ? orden : "original";
+  $("orden").value = ordenes.has(orden) ? orden : ordenInicial;
   estados.pagina = Number.parseInt(params.get("pagina"), 10) || 1;
   buscar({ reiniciar: false, sincronizar: false });
   const codigo = params.get("obra");
@@ -431,7 +436,7 @@ function iniciarBuscador() {
   $("limpiar").onclick = () => {
     form.reset();
     for (const id of ["dep", "tipo"]) $(id).value = "";
-    $("orden").value = "original";
+    $("orden").value = ordenInicial;
     actualizarUbicacion({ prov: "", dist: "" });
     aplicar();
     $("q").focus();

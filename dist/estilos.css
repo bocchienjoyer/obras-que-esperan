@@ -1,7 +1,7 @@
-/* Hallmark · shape: app screen · genre: editorial · theme: Editorial (deal 1/3, seed peruvian-public-infrastructure-register-9815·14d6ae30·2026-11-11·r0) · redesign: full
- * nav: masthead de Obras que esperan · signature: registro de obras con avance y ficha · states: carga, vacío, error, resultados
- * axes: light/display-condensed/chromatic-green · posture: restrained · contrast: pass · v2.0.0 */
-/* Hallmark · pre-emit critique: P4 H5 E4 S4 R5 V4 · weakest: S, la evidencia manda; subí los resultados y separé lugar, entidad y avance */
+/* Hallmark · shape: app screen · genre: editorial · theme: custom · v2.0.0
+ * axes: light/display-condensed/slate-blue · posture: restrained
+ * signature: puente, registro territorial y avance físico · states: carga, vacío, error, resultados
+ * critique: un solo título, fuentes al pie y color de avance junto al porcentaje */
 @import url("./tokens.css");
 @import url("./base.css");
 
@@ -37,44 +37,45 @@ button, input, select, textarea {
   transform: none;
 }
 
-.masthead {
-  background: var(--color-ink);
-  color: var(--color-accent-ink);
+.top {
+  border-block-start: 6px solid var(--color-ink);
 }
 
-.topline {
-  min-height: 64px;
+.intro-titulo {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: var(--space-md);
 }
 
-.topline a {
-  color: var(--color-accent-ink);
-  font-size: var(--text-sm);
-  white-space: nowrap;
-}
-
-.topline a:focus-visible {
-  outline-color: var(--color-mark);
-}
-
-.marca {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-sm);
-  font-weight: 700;
-  text-decoration: none;
-}
-
-.marca-icono {
-  width: 20px;
-  height: 16px;
+.puente {
+  position: relative;
   flex: none;
-  border: 2px solid var(--color-mark);
-  border-bottom: 4px double var(--color-mark);
-  transform: skewX(-12deg);
+  width: 3.25rem;
+  aspect-ratio: 1;
+  border-radius: var(--space-2xs);
+  background: var(--color-paper-3);
+  color: var(--color-accent);
+}
+
+.puente::before,
+.puente::after {
+  position: absolute;
+  top: 35%;
+  width: 30%;
+  height: 36%;
+  background: currentColor;
+  content: "";
+}
+
+.puente::before {
+  left: 16%;
+  clip-path: polygon(0 0, 100% 0, 100% 4px, 4px 4px, 4px 100%, 0 100%);
+}
+
+.puente::after {
+  right: 16%;
+  transform: scaleX(-1);
+  clip-path: polygon(0 0, 100% 0, 100% 4px, 4px 4px, 4px 100%, 0 100%);
 }
 
 .intro {
@@ -88,7 +89,7 @@ button, input, select, textarea {
 
 .intro h1 {
   max-width: none;
-  font-size: 3rem;
+  font-size: 3.5rem;
   font-variation-settings: "wdth" 75, "opsz" 72;
   line-height: 1.02;
 }
@@ -404,12 +405,52 @@ button:disabled, input:disabled, select:disabled, textarea:disabled {
 }
 
 .dato progress {
-  width: 4rem;
-  height: 4px;
+  appearance: none;
+  display: block;
+  width: 4.5rem;
+  height: 6px;
   margin-block: var(--space-2xs);
+  overflow: hidden;
   border: 0;
+  border-radius: var(--space-2xs);
   background: var(--color-rule);
-  accent-color: var(--color-accent);
+  color: var(--color-avance);
+  accent-color: var(--color-avance);
+}
+
+.avance-bajo {
+  --color-avance: var(--color-avance-bajo);
+}
+
+.avance-medio {
+  --color-avance: var(--color-avance-medio);
+}
+
+.avance-alto {
+  --color-avance: var(--color-avance-alto);
+}
+
+.dato progress[value="0"] {
+  outline: 1px solid var(--color-avance);
+  outline-offset: -1px;
+}
+
+.dato progress::-webkit-progress-bar {
+  background: var(--color-rule);
+}
+
+.dato progress::-webkit-progress-value {
+  background: var(--color-avance);
+}
+
+.dato progress::-moz-progress-bar {
+  background: var(--color-avance);
+}
+
+@media (forced-colors: active) {
+  .dato progress {
+    appearance: auto;
+  }
 }
 
 .dato a {
@@ -646,13 +687,12 @@ textarea {
 }
 
 @media (max-width: 40rem) {
-  .topline {
-    min-height: 56px;
-    gap: var(--space-xs);
+  .intro-titulo {
+    gap: var(--space-sm);
   }
 
-  .marca {
-    gap: var(--space-xs);
+  .puente {
+    width: 2.375rem;
   }
 
   .intro {
@@ -690,13 +730,13 @@ textarea {
     padding-inline: var(--space-xs);
   }
 
-  .lista-cabecera span:last-child, .dato progress {
+  .lista-cabecera span:last-child {
     display: none;
   }
 
   .dato {
-    display: flex;
-    flex-direction: row;
+    display: grid;
+    grid-template-columns: auto auto minmax(1rem, 1fr) auto;
     align-items: center;
     gap: var(--space-xs);
     border-top: var(--rule-hair) solid var(--color-rule);
@@ -716,8 +756,13 @@ textarea {
     font-size: var(--text-lg);
   }
 
+  .dato progress {
+    width: 100%;
+    max-width: 4.5rem;
+  }
+
   .dato a {
-    margin-inline-start: auto;
+    grid-column: 4;
   }
 
   #detalle, .ficha-top {

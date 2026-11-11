@@ -95,6 +95,53 @@ test("muestra el corte vigente y el total del inventario publicado", () => proba
   assert.equal(await pagina.locator("#revision-fuente").isVisible(), Boolean(inventario.revisado));
 }));
 
+test("ordena por nombre y conserva la opción del orden de la fuente al compartir una ficha", () => probar(async pagina => {
+  const obras = ["¿Zanja", "Camino", "Árbol"].map((obra, i) => ({
+    ...inventario.obras[0], obra, infobras: String(80000 + i), fila: i + 2,
+  }));
+  await sitioDePrueba({ "/obras.js": () => scriptInventario({ ...inventario, obras }) }, async url => {
+    await pagina.goto(url);
+    await esperarConteo(pagina, obras.length);
+    const nombres = () => pagina.locator(".resultado h3").allTextContents();
+    assert.equal(await pagina.locator("#orden").inputValue(), "nombre");
+    assert.deepEqual(await nombres(), ["Árbol", "Camino", "¿Zanja"]);
+    await pagina.locator("#orden").selectOption("original");
+    assert.deepEqual(await nombres(), ["¿Zanja", "Camino", "Árbol"]);
+    const enlace = await pagina.locator(".resultado h3 a").first().getAttribute("href");
+    assert.equal(new URL(enlace, url).searchParams.get("orden"), "original");
+    await pagina.goto(new URL(enlace, url).href);
+    assert.ok(await pagina.locator("#ficha").isVisible());
+    assert.equal(await pagina.locator("#orden").inputValue(), "original");
+    await pagina.locator("#cerrar-ficha").click();
+    await pagina.locator("#limpiar").click();
+    assert.equal(new URL(pagina.url()).searchParams.get("orden"), null);
+    assert.deepEqual(await nombres(), ["Árbol", "Camino", "¿Zanja"]);
+  });
+}));
+
+test("distingue los límites del avance físico y mantiene las barras en móvil", () => probar(async pagina => {
+  const avances = [0, 39.99, 40, 79.99, 80, 100, null];
+  const obras = avances.map((avance, i) => ({
+    ...inventario.obras[0], obra: "Obra " + i, infobras: String(81000 + i), fila: i + 2, avance,
+  }));
+  await sitioDePrueba({ "/obras.js": () => scriptInventario({ ...inventario, obras }) }, async url => {
+    await pagina.setViewportSize({ width: 320, height: 720 });
+    await pagina.goto(url);
+    await esperarConteo(pagina, obras.length);
+    const barras = pagina.locator(".resultado progress");
+    assert.deepEqual(await barras.evaluateAll(elementos => elementos.map(barra => [barra.value, barra.className])), [
+      [0, "avance-bajo"], [39.99, "avance-bajo"], [40, "avance-medio"],
+      [79.99, "avance-medio"], [80, "avance-alto"], [100, "avance-alto"],
+    ]);
+    assert.ok(await barras.first().isVisible());
+    assert.equal(await barras.first().evaluate(barra => getComputedStyle(barra).outlineStyle), "solid");
+    const colores = await barras.evaluateAll(elementos => elementos.map(barra => getComputedStyle(barra).accentColor));
+    assert.equal(new Set(colores).size, 3);
+    assert.equal(await pagina.locator(".resultado .dato strong").last().textContent(), "—");
+    assert.equal(await pagina.locator(".resultado").last().locator("progress").count(), 0);
+  });
+}));
+
 test("coinciden la consulta territorial, el total y el CSV del corte inicial", { skip: !corteInicial }, () => probar(async pagina => {
   await pagina.goto(local);
   await esperarConteo(pagina, 2262);
