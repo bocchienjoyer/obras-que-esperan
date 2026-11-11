@@ -63,4 +63,4 @@ Referencias de diseño: búsqueda por entidad y ubicación en [INFOBRAS](https:/
 
 ## 9. Qué hizo el agente
 
-Codex implementó la ingesta, el buscador, la ficha, la exportación, el borrador editable, las sugerencias locales y las pruebas automatizadas. Los registros provienen del Anexo 1 de Contraloría de junio de 2026.
+Codex implementó la ingesta, el buscador, la ficha, la exportación, el borrador editable, las sugerencias locales y las pruebas automatizadas. El inventario inicial provino del Anexo 1 de Contraloría de junio de 2026. La página enlaza el informe y el anexo del corte vigente.
