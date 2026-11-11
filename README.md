@@ -26,7 +26,7 @@ Abre el [buscador público](https://bocchienjoyer.github.io/obras-que-esperan/) 
 
 Para usar las sugerencias con IA, inicia sesión en Codex CLI, ejecuta `python servidor.py` en la raíz y visita [127.0.0.1:8000](http://127.0.0.1:8000). Abre una ficha y, dentro de **Preparar un pedido de información**, pulsa **Sugerir preguntas con IA**. La búsqueda, el CSV y el borrador editable funcionan también en la versión estática.
 
-Ejemplo: selecciona **Cusco → La Convención → Echarate** o escribe **¿Cuántas obras paralizadas hay en Echarate?**. Abre una ficha, revisa la entidad y descarga el CSV filtrado. Usa **CUI 2100376** o **INFOBRAS 59** para consultar por código exacto. Los enlaces a informes y resoluciones provienen del anexo. Para confirmar el estado posterior al corte o recuperar un documento que no abre, consulta INFOBRAS y el MEF usando los identificadores de la ficha.
+Ejemplo: selecciona **Cusco → La Convención → Echarate** o escribe **¿Cuántas obras paralizadas hay en Echarate?**. Abre una ficha, revisa la entidad y descarga el CSV filtrado. Usa **CUI 2100376** o **INFOBRAS 59** para consultar por código exacto. Los enlaces a informes y resoluciones provienen del anexo. Cada ficha abre directamente el registro de INFOBRAS y, cuando hay CUI, la inversión en el MEF. **Descargar resultados (CSV)** exporta todas las coincidencias, incluso las de otras páginas, con los campos de la ficha, las fechas de documentos disponibles y enlaces al anexo, a la ficha y a los registros oficiales. Los campos ausentes quedan vacíos.
 
 [Buscador nacional](docs/capturas/01-buscador.png) · [Filtro territorial](docs/capturas/02-filtro-territorial.png) · [Ficha de obra](docs/capturas/03-ficha.png)
 

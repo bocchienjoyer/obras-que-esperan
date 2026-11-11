@@ -11,6 +11,7 @@ const compararNombres = new Intl.Collator("es", { sensitivity: "base", ignorePun
 const obrasPorNombre = [...obras].sort((a, b) => compararNombres(a.obra, b.obra) || a.fila - b.fila);
 const ordenInicial = "nombre";
 const tamPagina = 12;
+const buscadorPublico = "https://bocchienjoyer.github.io/obras-que-esperan/";
 const sinDato = "Sin dato en el anexo";
 const fechaOficial = new Intl.DateTimeFormat("es-PE", { dateStyle: "long", timeZone: "UTC" });
 const fechaCorte = corte ? fechaOficial.format(new Date(corte)) : "";
@@ -232,6 +233,14 @@ function renderizar() {
   $("siguiente").disabled = estados.pagina === paginas;
 }
 
+function enlaceInfobras(codigo) {
+  return "https://infobras.contraloria.gob.pe/InfobrasWeb/Mapa/Obra?" + new URLSearchParams({ ObraId: codigo });
+}
+
+function enlaceMef(cui) {
+  return cui ? "https://ofi5.mef.gob.pe/ssi/Ssi/Index?" + new URLSearchParams({ codigo: cui, tipo: "2" }) : null;
+}
+
 function fuenteLink(url, texto) {
   return `<a href="${entidadHtml(url)}" target="_blank" rel="noopener noreferrer">${entidadHtml(texto)}</a>`;
 }
@@ -259,8 +268,8 @@ function ficha(codigo, abrirFicha = true) {
     urlOficial(obra.informe, "ofi5.mef.gob.pe") && fuenteLink(obra.informe, "Informe de estado situacional" + (obra.fechaInforme ? ` (${obra.fechaInforme})` : "")),
     urlOficial(obra.resolucion, "ofi5.mef.gob.pe") && fuenteLink(obra.resolucion, "Resolución de priorización" + (obra.fechaResolucion ? ` (${obra.fechaResolucion})` : "")),
     fuenteLink(anexo, `Anexo del inventario · fila ${obra.fila}`),
-    fuenteLink("https://www.gob.pe/es/10795-conocer-el-estado-de-las-obras-publicas-en-todo-el-peru-infobras", "Consultar INFOBRAS por código"),
-    obra.cui && fuenteLink("https://ofi5.mef.gob.pe/ssi/Ssi/Indexm", "Consultar MEF por CUI"),
+    fuenteLink(enlaceInfobras(obra.infobras), "Ver obra en INFOBRAS (" + obra.infobras + ")"),
+    obra.cui && fuenteLink(enlaceMef(obra.cui), "Ver inversión en el MEF (CUI " + obra.cui + ")"),
   ].filter(Boolean);
   $("detalle").innerHTML = `
     <h2 id="nombre-ficha">${entidadHtml(obra.obra)}</h2>
@@ -270,7 +279,7 @@ function ficha(codigo, abrirFicha = true) {
       `<div><dt>${entidadHtml(nombre)}</dt><dd>${entidadHtml(valor)}</dd></div>`).join("")}</dl>
     <h3>Documentos y consultas oficiales</h3>
     <ul>${documentos.map(link => `<li>${link}</li>`).join("")}</ul>
-    <p class="nota">La entidad y la unidad de control son las que figuran en el anexo. Si un documento externo no abre, consulta INFOBRAS con el código de la obra o el MEF con el CUI.</p>
+    <p class="nota">La entidad y la unidad de control son las que figuran en el anexo. Consulta los registros oficiales para verificar cambios posteriores al corte.</p>
     <div class="acciones">
       <button type="button" class="button" id="copiar-cita">Copiar referencia</button>
       <button type="button" class="button secondary" id="copiar-enlace">Copiar enlace a la ficha</button>
@@ -355,15 +364,27 @@ function descargar() {
   }, 400);
   const columnas = ["infobras", "cui", "obra", "entidad", "departamento", "provincia", "distrito",
     "tipo", "categoria", "subtipo", "avance", "modalidad", "causa", "organo", "costo", "pim",
-    "informe", "resolucion", "fila", "corte", "fuente"];
+    "informe", "resolucion", "fila", "corte", "fuente", "nivel", "inicio", "inventarioMef",
+    "priorizada", "anioPim", "fechaInforme", "fechaResolucion", "anexo", "ficha", "urlInfobras", "urlMef"];
   const celda = valor => {
     const texto = String(valor ?? "");
     const seguro = typeof valor === "string" && /^[\s]*[=+\-@]/.test(texto) ? "'" + texto : texto;
     return '"' + seguro.replace(/"/g, '""') + '"';
   };
-  const filas = estados.resultados.map(obra => columnas.map(clave =>
-    celda(clave === "corte" ? corte : clave === "fuente" ? fuente :
-      clave === "pim" && !obra.cui ? null : obra[clave])).join(","));
+  const filas = estados.resultados.map(obra => {
+    const registro = {
+      ...obra,
+      corte, fuente, anexo,
+      pim: obra.cui ? obra.pim : null,
+      anioPim: obra.cui ? anioPim : null,
+      informe: urlOficial(obra.informe, "ofi5.mef.gob.pe") ? obra.informe : null,
+      resolucion: urlOficial(obra.resolucion, "ofi5.mef.gob.pe") ? obra.resolucion : null,
+      ficha: buscadorPublico + "?" + new URLSearchParams({ obra: obra.infobras }),
+      urlInfobras: enlaceInfobras(obra.infobras),
+      urlMef: enlaceMef(obra.cui),
+    };
+    return columnas.map(clave => celda(registro[clave])).join(",");
+  });
   const url = URL.createObjectURL(new Blob(["\ufeff", [columnas.join(","), ...filas].join("\r\n")], { type: "text/csv;charset=utf-8" }));
   const link = document.createElement("a");
   link.href = url;

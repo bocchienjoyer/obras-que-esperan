@@ -9,7 +9,7 @@
   <link rel="icon" href="favicon.ico">
   <link rel="stylesheet" href="estilos.css?v=pizarra">
   <script defer src="obras.js"></script>
-  <script defer src="buscador.js?v=pizarra"></script>
+  <script defer src="buscador.js?v=fichas"></script>
   <script>
     function mostrarErrorInventario() {
       if (document.getElementById("busqueda")?.dataset.listo) return;
@@ -81,7 +81,7 @@
                 <div class="sort-row">
                   <label>Ordenar por <select id="orden" disabled><option value="nombre">Nombre de la obra (A a Z)</option><option value="original">Orden de la fuente</option><option value="avance">Mayor avance</option><option value="costo">Mayor costo de obra</option></select></label>
                 </div>
-                <button id="descargar" type="button" class="button secondary" disabled>Descargar CSV</button>
+                <button id="descargar" type="button" class="button secondary" disabled>Descargar resultados (CSV)</button>
               </div>
             </div>
             <p id="error-carga" class="vacio" role="alert" hidden>El inventario no pudo cargarse. <a href="">Vuelve a cargar la página</a> o consulta el <a href="https://www.gob.pe/institucion/contraloria/colecciones/18230-obras-paralizadas-documentos">compendio oficial</a>.</p>

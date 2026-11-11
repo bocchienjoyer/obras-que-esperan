@@ -171,6 +171,40 @@ test("coinciden la consulta territorial, el total y el CSV del corte inicial", {
   await esperarConteo(pagina, 54);
 }));
 
+test("exporta los campos de la ficha y enlaces verificables, con o sin CUI", { skip: !corteInicial }, () => probar(async pagina => {
+  async function exportar(consulta) {
+    await pagina.goto(local + "?" + new URLSearchParams(consulta));
+    await esperarConteo(pagina, 1);
+    const [descarga] = await Promise.all([
+      pagina.waitForEvent("download"), pagina.getByRole("button", { name: "Descargar resultados (CSV)" }).click(),
+    ]);
+    const [cabecera, fila] = (await readFile(await descarga.path(), "utf8")).replace(/^\uFEFF/, "").trimEnd().split(/\r?\n/);
+    const valores = [...fila.matchAll(/"((?:[^"]|"")*)"(?:,|$)/g)].map(grupo => grupo[1].replaceAll('""', '"'));
+    return Object.fromEntries(cabecera.split(",").map((clave, i) => [clave, valores[i]]));
+  }
+
+  const fila = await exportar({ dep: "JUNIN", prov: "CONCEPCION", dist: "MATAHUASI" });
+  assert.deepEqual([fila.infobras, fila.cui, fila.avance, fila.fila, fila.nivel, fila.inicio], ["28117", "2185641", "56.06", "218", "G. LOCAL", "2015"]);
+  assert.deepEqual([fila.inventarioMef, fila.priorizada, fila.pim, fila.anioPim], ["NO", "", "0", "2026"]);
+  assert.equal(fila.anexo, inventario.anexo);
+  assert.equal(fila.ficha, "https://bocchienjoyer.github.io/obras-que-esperan/?obra=28117");
+  await pagina.locator('.dato a[data-obra="28117"]').click();
+  assert.equal(await pagina.getByRole("link", { name: "Ver obra en INFOBRAS (28117)" }).getAttribute("href"), fila.urlInfobras);
+  assert.equal(await pagina.getByRole("link", { name: "Ver inversión en el MEF (CUI 2185641)" }).getAttribute("href"), fila.urlMef);
+  assert.equal(fila.urlInfobras, "https://infobras.contraloria.gob.pe/InfobrasWeb/Mapa/Obra?ObraId=28117");
+  assert.equal(fila.urlMef, "https://ofi5.mef.gob.pe/ssi/Ssi/Index?codigo=2185641&tipo=2");
+
+  const conInforme = await exportar({ q: "INFOBRAS 5712" });
+  const original = inventario.obras.find(obra => obra.infobras === "5712");
+  assert.equal(conInforme.informe, original.informe);
+  assert.equal(conInforme.fechaInforme, original.fechaInforme);
+
+  const sinCui = await exportar({ q: "INFOBRAS 558323" });
+  assert.deepEqual([sinCui.cui, sinCui.urlMef, sinCui.pim, sinCui.anioPim], ["", "", "", ""]);
+  await pagina.locator('.dato a[data-obra="558323"]').click();
+  assert.equal(await pagina.getByRole("link", { name: /Ver inversión en el MEF/ }).count(), 0);
+}));
+
 test("distingue identificadores y conserva la búsqueda al volver de una ficha", { skip: !corteInicial }, () => probar(async pagina => {
   await pagina.goto(local + "?q=CUI+59");
   await esperarConteo(pagina, 0);
