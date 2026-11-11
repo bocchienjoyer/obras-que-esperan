@@ -51,7 +51,7 @@ Las pruebas de Python corren con `python -m unittest discover -s tests -v`. Para
 
 ## 7. Modelo de negocio
 
-La búsqueda es abierta. La hipótesis de pago es S/49 al mes por institución, dirigida a redacciones y organizaciones de investigación que quieran recibir alertas de nuevos cortes y seguir obras guardadas. Las alertas y el seguimiento son funciones propuestas. En el prototipo, buscar y exportar usa 0 tokens y el alojamiento estático actual en GitHub Pages tiene un costo directo de S/0 por usuario. Cada solicitud de preguntas hace una llamada al modelo de la sesión local de Codex del usuario. Su consumo en tokens todavía está por medir. El costo de alojar las alertas también queda por estimar.
+La búsqueda es abierta. La hipótesis de pago es S/49 al mes por institución, dirigida a redacciones y organizaciones de investigación que quieran recibir alertas de nuevos cortes y seguir obras guardadas. Las alertas y el seguimiento son funciones propuestas. En el prototipo, buscar y exportar usa 0 tokens y el alojamiento estático actual en GitHub Pages tiene un costo directo de S/0 por usuario. Cada solicitud de preguntas hace una llamada al modelo de la sesión local de Codex del usuario. En una prueba con Matahuasi, Codex CLI reportó 16 415 tokens de entrada y 24 de salida para una solicitud que devolvió tres sugerencias válidas. Es una medición de una llamada y puede variar por modelo y sesión. El costo de alojar las alertas también queda por estimar.
 
 ## 8. Herramientas del curso
 
