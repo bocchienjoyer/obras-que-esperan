@@ -163,6 +163,21 @@ test("abre enlaces de ficha, conserva datos ausentes y funciona en móvil", { sk
   assert.match(await pagina.locator("#conteo").innerText(), /13–24/);
 }));
 
+test("el contenido y la ficha caben en pantallas de 320, 360 y 390 píxeles", () => probar(async pagina => {
+  await pagina.goto(local + "?q=INFOBRAS+" + inventario.obras[0].infobras);
+  for (const ancho of [320, 360, 390]) {
+    await pagina.setViewportSize({ width: ancho, height: 800 });
+    const cabe = () => pagina.evaluate(() => document.documentElement.scrollWidth <= innerWidth);
+    assert.ok(await cabe(), `La página se desborda a ${ancho} px`);
+    await pagina.locator("#lista h3 a").click();
+    await pagina.locator("#ficha[open]").waitFor();
+    assert.ok(await cabe(), `La ficha se desborda a ${ancho} px`);
+    await pagina.locator("#cerrar-ficha").click();
+    await pagina.locator("#ficha[open]").waitFor({ state: "hidden" });
+    assert.ok(await cabe(), `La página se desborda al cerrar a ${ancho} px`);
+  }
+}));
+
 test("añade sugerencias de Codex al borrador sin perder ediciones", {
   skip: !process.env.OBRAS_IA_REAL, timeout: 65000,
 }, () => probar(async pagina => {
