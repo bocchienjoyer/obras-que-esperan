@@ -121,9 +121,9 @@ function opciones(select, texto, valores, preferido = select.value) {
 
 function actualizarUbicacion(preferencias = {}) {
   const porDepartamento = obras.filter(obra => !$("dep").value || obra.departamento === $("dep").value);
-  opciones($("prov"), "Todas las provincias", porDepartamento.map(obra => obra.provincia), preferencias.prov);
+  opciones($("prov"), "Todas", porDepartamento.map(obra => obra.provincia), preferencias.prov);
   const porProvincia = porDepartamento.filter(obra => !$("prov").value || obra.provincia === $("prov").value);
-  opciones($("dist"), "Todos los distritos", porProvincia.map(obra => obra.distrito), preferencias.dist);
+  opciones($("dist"), "Todos", porProvincia.map(obra => obra.distrito), preferencias.dist);
   $("prov").disabled = !$("dep").value;
   $("dist").disabled = !$("prov").value;
 }
@@ -204,17 +204,22 @@ function renderizar() {
   const desde = (estados.pagina - 1) * tamPagina;
   const filas = estados.resultados.slice(desde, desde + tamPagina);
   $("conteo").textContent = `${cantidad.format(total)} ${total === 1 ? "obra encontrada" : "obras encontradas"}`
-    + (total > tamPagina ? ` · Mostrando ${cantidad.format(desde + 1)}–${cantidad.format(desde + filas.length)}` : "");
+    + (total > tamPagina ? ` (mostrando ${cantidad.format(desde + 1)}–${cantidad.format(desde + filas.length)})` : "");
   $("descargar").disabled = !total || estados.descargando;
   $("lista").innerHTML = filas.length ? filas.map(obra => `
     <li class="resultado">
-      <div>
+      <div class="registro">
+        <p class="registro-lugar">${entidadHtml(lugar(obra))}</p>
         <h3><a data-obra="${obra.infobras}" href="${entidadHtml(enlaceFicha(obra.infobras))}">${entidadHtml(obra.obra)}</a></h3>
-        <p>${entidadHtml(obra.entidad)} · ${entidadHtml(lugar(obra))}</p>
-        <p class="meta">${entidadHtml(obra.tipo)} · INFOBRAS ${obra.infobras}${obra.cui ? ` · CUI ${obra.cui}` : ""}</p>
-        <a data-obra="${obra.infobras}" href="${entidadHtml(enlaceFicha(obra.infobras))}" aria-label="Ver ficha INFOBRAS ${obra.infobras}">Ver ficha <span aria-hidden="true">↗</span></a>
+        <p class="registro-entidad">${entidadHtml(obra.entidad)}</p>
+        <p class="meta registro-codigos"><span>${entidadHtml(obra.tipo)}</span><span>INFOBRAS ${obra.infobras}</span>${obra.cui ? `<span>CUI ${obra.cui}</span>` : ""}</p>
       </div>
-      <div class="dato"><strong>${obra.avance == null ? "—" : porcentaje(obra.avance)}</strong><span>Avance físico</span></div>
+      <div class="dato">
+        <span class="dato-etiqueta">Avance físico</span>
+        <strong>${obra.avance == null ? "—" : porcentaje(obra.avance)}</strong>
+        ${Number.isFinite(obra.avance) ? `<progress aria-hidden="true" value="${obra.avance}" max="100"></progress>` : ""}
+        <a data-obra="${obra.infobras}" href="${entidadHtml(enlaceFicha(obra.infobras))}" aria-label="Ver ficha INFOBRAS ${obra.infobras}">Ver ficha</a>
+      </div>
     </li>`).join("") : '<li class="vacio">No hay coincidencias en este corte. Prueba con otro nombre o amplía la ubicación.</li>';
   $("paginacion").hidden = paginas === 1;
   $("pagina").textContent = `Página ${estados.pagina} de ${paginas}`;
@@ -223,7 +228,7 @@ function renderizar() {
 }
 
 function fuenteLink(url, texto) {
-  return `<a href="${entidadHtml(url)}" target="_blank" rel="noopener noreferrer">${entidadHtml(texto)} ↗</a>`;
+  return `<a href="${entidadHtml(url)}" target="_blank" rel="noopener noreferrer">${entidadHtml(texto)}</a>`;
 }
 
 function ficha(codigo, abrirFicha = true) {
@@ -254,8 +259,8 @@ function ficha(codigo, abrirFicha = true) {
   ].filter(Boolean);
   $("detalle").innerHTML = `
     <h2 id="nombre-ficha">${entidadHtml(obra.obra)}</h2>
-    <p class="meta">${entidadHtml(lugar(obra))} · Corte al ${fechaCorte}</p>
-    <p class="meta">INFOBRAS ${obra.infobras} · CUI ${obra.cui ?? "sin dato"}</p>
+    <p class="meta registro-codigos"><span>${entidadHtml(lugar(obra))}</span><span>Corte al ${fechaCorte}</span></p>
+    <p class="meta registro-codigos"><span>INFOBRAS ${obra.infobras}</span><span>CUI ${obra.cui ?? "sin dato"}</span></p>
     <dl class="campos">${campos.map(([nombre, valor]) =>
       `<div><dt>${entidadHtml(nombre)}</dt><dd>${entidadHtml(valor)}</dd></div>`).join("")}</dl>
     <h3>Documentos y consultas oficiales</h3>
@@ -386,7 +391,7 @@ function leerURL() {
   const params = new URLSearchParams(location.search);
   opciones($("dep"), "Todo el Perú", obras.map(obra => obra.departamento), params.get("dep"));
   actualizarUbicacion({ prov: params.get("prov"), dist: params.get("dist") });
-  opciones($("tipo"), "Todos los tipos", obras.map(obra => obra.tipo), params.get("tipo"));
+  opciones($("tipo"), "Todos", obras.map(obra => obra.tipo), params.get("tipo"));
   $("q").value = params.get("q") ?? "";
   const avance = params.get("avance");
   $("avance").value = ["90", "100", "sin"].includes(avance) ? avance : "";
@@ -404,7 +409,7 @@ function iniciarBuscador() {
   $("fuente").href = fuente;
   $("anexo").href = anexo;
   $("corte-portada").dateTime = corte;
-  $("corte-portada").textContent = `Perú · Corte al ${fechaCorte}`;
+  $("corte-portada").textContent = fechaCorte;
   $("corte-fuente").dateTime = corte;
   $("corte-fuente").textContent = fechaCorte;
   if (fechaISO(revisado)) {

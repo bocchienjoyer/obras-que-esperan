@@ -5,3 +5,5 @@ __pycache__/
 .venv/
 *.xlsx
 node_modules/
+/.hallmark/
+/dist/.hallmark/

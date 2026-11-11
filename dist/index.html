@@ -7,9 +7,9 @@
   <meta name="theme-color" content="#152927">
   <title>Obras que esperan · Buscador de obras paralizadas</title>
   <link rel="icon" href="favicon.ico">
-  <link rel="stylesheet" href="estilos.css?v=20261110">
+  <link rel="stylesheet" href="estilos.css?v=editorial">
   <script defer src="obras.js"></script>
-  <script defer src="buscador.js?v=20261110"></script>
+  <script defer src="buscador.js?v=editorial"></script>
   <script>
     function mostrarErrorInventario() {
       if (document.getElementById("busqueda")?.dataset.listo) return;
@@ -18,6 +18,8 @@
       if (!conteo || !aviso) return;
       conteo.textContent = "El inventario no está disponible.";
       aviso.hidden = false;
+      const carga = document.getElementById("carga-lista");
+      if (carga) carga.hidden = true;
     }
     window.addEventListener("load", mostrarErrorInventario, { once: true });
     window.setTimeout(mostrarErrorInventario, 12000);
@@ -26,62 +28,86 @@
 <body>
   <a class="skip" href="#busqueda">Ir al buscador</a>
   <header class="top">
-    <div class="wrap topline">
-      <a class="marca" href="index.html"><span class="marca-icono" aria-hidden="true"></span>Obras que esperan</a>
-      <a href="#fuentes">Fuentes y metodología</a>
+    <div class="masthead">
+      <div class="wrap topline">
+        <a class="marca" href="index.html" aria-label="Obras que esperan, inicio"><span class="marca-icono" aria-hidden="true"></span>Obras que esperan</a>
+        <nav aria-label="Principal"><a href="#fuentes">Fuentes y metodología</a></nav>
+      </div>
     </div>
     <div class="wrap intro">
-      <p class="corte"><span aria-hidden="true"></span> <time id="corte-portada"></time></p>
-      <h1>¿Qué obras están <br>paralizadas?</h1>
-      <p>Encuentra obras públicas por lugar, identifica la entidad a cargo y consulta la documentación oficial.</p>
+      <div class="intro-texto">
+        <h1>¿Qué obras están paralizadas?</h1>
+        <p>Encuentra obras públicas por lugar, identifica la entidad a cargo y consulta la documentación oficial.</p>
+      </div>
+      <dl class="corte">
+        <dt>Corte del inventario en Perú</dt>
+        <dd><time id="corte-portada"></time></dd>
+      </dl>
     </div>
   </header>
   <main class="wrap">
     <form id="busqueda" role="search" aria-label="Buscar obras paralizadas">
       <fieldset id="controles-busqueda" disabled>
-        <label class="consulta">Busca por obra, entidad, lugar, CUI o código INFOBRAS
-          <input id="q" type="search" maxlength="200" placeholder="Ej. ¿Cuántas obras hay en Echarate?, colegio en Cusco, CUI 2100376">
-        </label>
-        <div class="filtros">
-          <label>Departamento<select id="dep"></select></label>
-          <label>Provincia<select id="prov"></select></label>
-          <label>Distrito<select id="dist"></select></label>
-          <label>Tipo de obra<select id="tipo"></select></label>
-          <label>Avance físico<select id="avance">
-            <option value="">Cualquier avance</option>
-            <option value="90">Desde 90 %</option>
-            <option value="100">100 % reportado</option>
-            <option value="sin">Sin dato</option>
-          </select></label>
+        <div class="barra-busqueda">
+          <label for="q">Busca por obra, entidad, lugar, CUI o código INFOBRAS</label>
+          <div class="consulta">
+            <div class="campo-busqueda">
+              <span class="lupa" aria-hidden="true"></span>
+              <input id="q" type="search" maxlength="200" autocomplete="off" placeholder="Ej. colegio en Cusco">
+            </div>
+            <button class="button primaria" type="submit">Buscar</button>
+          </div>
         </div>
-        <div class="form-actions">
-          <button class="text-button" id="limpiar" type="button">Limpiar filtros</button>
+        <div class="mesa-busqueda">
+          <aside class="panel-filtros" aria-labelledby="titulo-filtros">
+            <div class="filtros-cabecera">
+              <h2 id="titulo-filtros">Filtros</h2>
+              <button class="text-button" id="limpiar" type="button">Limpiar filtros</button>
+            </div>
+            <div class="filtros">
+              <label>Departamento<select id="dep"></select></label>
+              <label>Provincia<select id="prov"></select></label>
+              <label>Distrito<select id="dist"></select></label>
+              <label>Tipo de obra<select id="tipo"></select></label>
+              <label>Avance físico<select id="avance">
+                <option value="">Cualquiera</option>
+                <option value="90">Desde 90 %</option>
+                <option value="100">100 % reportado</option>
+                <option value="sin">Sin dato</option>
+              </select></label>
+            </div>
+          </aside>
+          <section id="resultados" aria-labelledby="titulo-resultados">
+            <div class="results-head">
+              <div><h2 id="titulo-resultados">Obras en el corte</h2><p id="conteo" role="status">Cargando el inventario…</p></div>
+              <div class="resultados-herramientas">
+                <div class="sort-row">
+                  <label>Ordenar por <select id="orden" disabled><option value="original">Orden del anexo</option><option value="avance">Mayor avance</option><option value="costo">Mayor costo de obra</option></select></label>
+                </div>
+                <button id="descargar" type="button" class="button secondary" disabled>Descargar CSV</button>
+              </div>
+            </div>
+            <p id="error-carga" class="vacio" role="alert" hidden>El inventario no pudo cargarse. <a href="">Vuelve a cargar la página</a> o consulta el <a href="https://www.gob.pe/institucion/contraloria/colecciones/18230-obras-paralizadas-documentos">compendio oficial</a>.</p>
+            <p id="aviso-ficha" class="nota" role="status" hidden>El código de esta ficha no está en el corte disponible. Puedes buscar otra obra.</p>
+            <div class="lista-cabecera" aria-hidden="true"><span>Obra y entidad</span><span>Avance físico</span></div>
+            <ul id="lista" class="lista" aria-label="Obras encontradas"><li id="carga-lista" class="carga-lista" aria-hidden="true"><span></span><span></span></li></ul>
+            <nav id="paginacion" class="pagination" aria-label="Páginas de resultados" hidden>
+              <button id="anterior" type="button" class="button secondary">Anterior</button>
+              <span id="pagina"></span>
+              <button id="siguiente" type="button" class="button secondary">Siguiente</button>
+            </nav>
+          </section>
         </div>
       </fieldset>
     </form>
-    <section id="resultados" aria-labelledby="titulo-resultados">
-      <div class="results-head">
-        <div><h2 id="titulo-resultados">Obras en el corte</h2><p id="conteo" role="status">Cargando el inventario…</p></div>
-        <button id="descargar" type="button" class="button secondary" disabled>Descargar CSV</button>
-      </div>
-      <div class="sort-row">
-        <label>Ordenar por <select id="orden" disabled><option value="original">Orden del anexo</option><option value="avance">Mayor avance</option><option value="costo">Mayor costo de obra</option></select></label>
-      </div>
-      <p id="error-carga" class="vacio" role="alert" hidden>El inventario no pudo cargarse. <a href="">Vuelve a cargar la página</a> o consulta el <a href="https://www.gob.pe/institucion/contraloria/colecciones/18230-obras-paralizadas-documentos">compendio oficial</a>.</p>
-      <p id="aviso-ficha" class="nota" role="status" hidden>El código de esta ficha no está en el corte disponible. Puedes buscar otra obra.</p>
-      <ul id="lista" class="lista" aria-label="Obras encontradas"></ul>
-      <nav id="paginacion" class="pagination" aria-label="Páginas de resultados" hidden>
-        <button id="anterior" type="button" class="button secondary">Anterior</button>
-        <span id="pagina"></span>
-        <button id="siguiente" type="button" class="button secondary">Siguiente</button>
-      </nav>
-    </section>
     <section id="fuentes" class="fuentes">
       <h2>Fuentes y metodología</h2>
-      <p>El buscador cuenta registros por código INFOBRAS en el inventario de Contraloría con corte al <time id="corte-fuente"></time>. Una inversión puede agrupar varias obras con el mismo CUI.</p>
-      <p id="revision-fuente" hidden></p>
-      <p>El avance físico corresponde al corte. Para confirmar el estado actual, la recepción o la prestación del servicio, consulta a la entidad y revisa los sistemas oficiales.</p>
-      <a id="fuente">Informe de Contraloría</a> · <a id="anexo">Anexo original (XLSX)</a>
+      <div>
+        <p>El buscador cuenta registros por código INFOBRAS en el inventario de Contraloría con corte al <time id="corte-fuente"></time>. Una inversión puede agrupar varias obras con el mismo CUI.</p>
+        <p id="revision-fuente" hidden></p>
+        <p>El avance físico corresponde al corte. Para confirmar el estado actual, la recepción o la prestación del servicio, consulta a la entidad y revisa los sistemas oficiales.</p>
+        <div class="fuentes-enlaces"><a id="fuente">Informe de Contraloría</a><a id="anexo">Anexo original (XLSX)</a></div>
+      </div>
     </section>
   </main>
   <dialog id="ficha" aria-labelledby="nombre-ficha">

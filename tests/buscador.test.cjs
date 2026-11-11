@@ -41,7 +41,7 @@ async function probar(navegar) {
 
 async function esperarConteo(pagina, total) {
   await pagina.waitForFunction(n => {
-    const conteo = document.querySelector("#conteo").textContent;
+    const conteo = document.querySelector("#conteo")?.textContent ?? "";
     return conteo.split(" ")[0].replace(/\D/g, "") === String(n);
   }, total);
 }
@@ -50,6 +50,10 @@ async function sitioDePrueba(rutas, prueba) {
   const tipos = {
     "/": ["index.html", "text/html; charset=utf-8"],
     "/estilos.css": ["estilos.css", "text/css"],
+    "/base.css": ["base.css", "text/css"],
+    "/tokens.css": ["tokens.css", "text/css"],
+    "/fuentes-tipograficas/bricolage-grotesque.woff2": ["fuentes-tipograficas/bricolage-grotesque.woff2", "font/woff2"],
+    "/fuentes-tipograficas/source-serif-4.woff2": ["fuentes-tipograficas/source-serif-4.woff2", "font/woff2"],
     "/buscador.js": ["buscador.js", "text/javascript; charset=utf-8"],
     "/obras.js": ["obras.js", "text/javascript; charset=utf-8"],
   };
@@ -163,9 +167,9 @@ test("abre enlaces de ficha, conserva datos ausentes y funciona en móvil", { sk
   assert.match(await pagina.locator("#conteo").innerText(), /13–24/);
 }));
 
-test("el contenido y la ficha caben en pantallas de 320, 360 y 390 píxeles", () => probar(async pagina => {
+test("el contenido y la ficha caben en móvil, tableta y escritorio", () => probar(async pagina => {
   await pagina.goto(local + "?q=INFOBRAS+" + inventario.obras[0].infobras);
-  for (const ancho of [320, 360, 390]) {
+  for (const ancho of [320, 360, 390, 768, 1024, 1280]) {
     await pagina.setViewportSize({ width: ancho, height: 800 });
     const cabe = () => pagina.evaluate(() => document.documentElement.scrollWidth <= innerWidth);
     assert.ok(await cabe(), `La página se desborda a ${ancho} px`);
