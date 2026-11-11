@@ -22,7 +22,7 @@ La Contraloría publica el inventario en formato reutilizable y lo vincula con d
 
 ## 6. Demo
 
-Abre [el buscador local](dist/index.html) directamente en un navegador o usa la [versión privada en línea](https://obras-que-esperan.jpcardenaslover22.chatgpt.site/).
+Abre el [buscador público](https://bocchienjoyer.github.io/obras-que-esperan/) o la [versión local](dist/index.html) directamente en un navegador.
 
 Para usar las sugerencias con IA, inicia sesión en Codex CLI, ejecuta `python servidor.py` en la raíz y visita [127.0.0.1:8000](http://127.0.0.1:8000). Abre una ficha y, dentro de **Preparar un pedido de información**, pulsa **Sugerir preguntas con IA**. La búsqueda, el CSV y el borrador editable funcionan también en la versión estática.
 
