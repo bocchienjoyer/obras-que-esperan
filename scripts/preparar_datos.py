@@ -1,14 +1,16 @@
-"""Convierte el Anexo 1 de Contraloría de junio de 2026 en datos para el sitio."""
+"""Reproduce el corte inicial o importa un inventario nacional de Contraloría."""
 
 import argparse
 import hashlib
 import json
 import math
+import re
 from datetime import date
 from io import BytesIO
 from pathlib import Path
 from urllib.parse import urlsplit
 from urllib.request import urlopen
+from unicodedata import normalize
 
 from openpyxl import load_workbook
 from openpyxl.utils.datetime import from_excel
@@ -17,6 +19,20 @@ FUENTE = "https://www.gob.pe/institucion/contraloria/informes-publicaciones/8489
 ANEXO = "https://cdn.www.gob.pe/uploads/document/file/10466637/8489152-anexo-n-01-base-de-datos-con-la-lista-de-obras-publicas-paralizadas-en-el-territorio-nacional.XLSX?v=1787003153"
 SHA256 = "aee166f5f864722222b67f4e36926c05308efaecba1db81f3652d926e1d30b35"
 SALIDA = Path(__file__).resolve().parents[1] / "dist" / "obras.js"
+PREFIJO = "globalThis.INVENTARIO = "
+CAMPOS = {
+    "fila_oficial": "n", "infobras": "codigo infobras", "cui": "cui",
+    "obra": "descripcion obra", "entidad": "entidad", "modalidad": "modalidad de ejecucion",
+    "costo": "costo de obra segun exp tec segun infobras s", "tipo": "tipo de obra",
+    "categoria": "tipo de obra nivel 2", "subtipo": "tipo de obra nivel 3",
+    "departamento": "departamento", "provincia": "provincia", "distrito": "distrito",
+    "inicio": "ano inicio obra", "avance": "avance fisico", "nivel": "nivel de gobierno",
+    "sector": "sector", "causa": "causal paralizacion", "organo": "unidad organica",
+    "inventarioMef": "esta en el inventario obras paralizadas mef",
+    "fechaInforme": "fecha informe situacional", "informe": "url informe",
+    "priorizada": "dentro de la lista priorizada",
+    "fechaResolucion": "fecha resolucion de lista priorizada", "resolucion": "url resolucion",
+}
 
 
 def texto(valor):
@@ -28,7 +44,11 @@ def texto(valor):
 
 
 def codigo(valor):
-    return str(int(valor)) if isinstance(valor, (int, float)) and valor > 0 else None
+    if isinstance(valor, str) and valor.strip().isascii() and valor.strip().isdecimal():
+        valor = int(valor)
+    if type(valor) in (int, float) and math.isfinite(valor) and valor > 0 and int(valor) == valor:
+        return str(int(valor))
+    return None
 
 
 def numero(valor):
@@ -50,37 +70,100 @@ def documento(valor):
     return None
 
 
-def preparar(contenido):
-    if hashlib.sha256(contenido).hexdigest() != SHA256:
-        raise ValueError("El archivo difiere del Anexo 1 verificado de junio de 2026.")
+def normalizar(valor):
+    plano = normalize("NFD", texto(valor) or "").encode("ascii", "ignore").decode().lower()
+    return " ".join(re.findall(r"[a-z0-9]+", plano))
+
+
+def columnas(encabezados):
+    normalizados = [normalizar(valor) for valor in encabezados]
+    indices = {}
+    for campo, titulo in CAMPOS.items():
+        if normalizados.count(titulo) != 1:
+            raise ValueError(f"Columna ausente o ambigua: {titulo}.")
+        indices[campo] = normalizados.index(titulo)
+    pim = [(i, h[-4:]) for i, h in enumerate(normalizados) if re.fullmatch(r"pim 20\d{2}", h)]
+    if len(pim) != 1:
+        raise ValueError("La columna PIM con año es ausente o ambigua.")
+    indices["pim"], anio = pim[0]
+    return indices, int(anio)
+
+
+def preparar(contenido, corte, fuente, anexo):
     libro = load_workbook(BytesIO(contenido), read_only=True, data_only=True)
     registros = []
     try:
-        filas = iter(libro["Data"].values)
-        next(filas)
+        candidatas = []
+        for hoja in libro:
+            filas = iter(hoja.values)
+            try:
+                indices, anio_pim = columnas(next(filas, ()))
+            except ValueError:
+                continue
+            candidatas.append((filas, indices, anio_pim))
+        if len(candidatas) != 1:
+            raise ValueError("Se esperaba una sola hoja con la estructura del inventario nacional.")
+        filas, indices, anio_pim = candidatas[0]
+        if abs(anio_pim - corte.year) > 1:
+            raise ValueError("El año del PIM no corresponde al periodo del informe.")
+        codigos = set()
+        fin = False
         for fila_excel, fila in enumerate(filas, start=2):
+            if not any(texto(valor) is not None for valor in fila):
+                fin = True
+                continue
+            datos = {campo: fila[indice] for campo, indice in indices.items()}
+            infobras = codigo(datos["infobras"])
+            if (fin or codigo(datos["fila_oficial"]) != str(len(registros) + 1)
+                    or not infobras or infobras in codigos):
+                raise ValueError(f"Identificador o secuencia inválida en la fila {fila_excel}.")
+            if not all(texto(datos[campo]) for campo in ("obra", "entidad", "departamento")):
+                raise ValueError(f"Faltan datos obligatorios en la fila {fila_excel}.")
+            avance = numero(datos["avance"])
+            if datos["avance"] is not None and (avance is None or not 0 <= avance <= 100):
+                raise ValueError(f"Avance físico inválido en la fila {fila_excel}.")
+            for campo in ("pim", "costo"):
+                monto = numero(datos[campo])
+                if datos[campo] is not None and (monto is None or monto < 0):
+                    raise ValueError(f"Monto inválido en la fila {fila_excel}, campo {campo}.")
+            cui = codigo(datos["cui"])
+            if datos["cui"] not in (0, "0", None, "") and not cui:
+                raise ValueError(f"CUI inválido en la fila {fila_excel}.")
+            codigos.add(infobras)
             registros.append({
-                "fila": fila_excel, "infobras": codigo(fila[1]), "cui": codigo(fila[2]),
-                "obra": texto(fila[5]), "entidad": texto(fila[6]),
-                "modalidad": texto(fila[8]), "costo": numero(fila[9]),
-                "pim": numero(fila[14]), "tipo": texto(fila[16]),
-                "categoria": texto(fila[17]), "subtipo": texto(fila[18]),
-                "departamento": texto(fila[19]), "provincia": texto(fila[20]),
-                "distrito": texto(fila[21]),
-                "inicio": texto(fila[22]) if isinstance(fila[22], str) else numero(fila[22]),
-                "avance": numero(fila[24]), "nivel": texto(fila[26]),
-                "sector": texto(fila[27]), "causa": texto(fila[28]),
-                "organo": texto(fila[29]), "inventarioMef": texto(fila[30]),
-                "fechaInforme": fecha(fila[33], libro.epoch), "informe": documento(fila[34]),
-                "priorizada": texto(fila[35]), "fechaResolucion": fecha(fila[36], libro.epoch),
-                "resolucion": documento(fila[37]),
+                "fila": fila_excel, "infobras": infobras, "cui": cui,
+                **{campo: texto(datos[campo]) for campo in (
+                    "obra", "entidad", "modalidad", "tipo", "categoria", "subtipo",
+                    "departamento", "provincia", "distrito", "nivel", "sector",
+                    "causa", "organo", "inventarioMef", "priorizada",
+                )},
+                "costo": numero(datos["costo"]), "pim": numero(datos["pim"]), "avance": avance,
+                "inicio": texto(datos["inicio"]) if isinstance(datos["inicio"], str) else numero(datos["inicio"]),
+                "fechaInforme": fecha(datos["fechaInforme"], libro.epoch),
+                "fechaResolucion": fecha(datos["fechaResolucion"], libro.epoch),
+                "informe": documento(datos["informe"]), "resolucion": documento(datos["resolucion"]),
             })
     finally:
         libro.close()
-    identificadores = {obra["infobras"] for obra in registros}
-    if len(registros) != 2262 or len(identificadores) != 2262 or None in identificadores:
-        raise ValueError("El inventario debe contener 2262 códigos INFOBRAS distintos.")
-    return {"corte": "2026-06-30", "fuente": FUENTE, "anexo": ANEXO, "obras": registros}
+    if not registros:
+        raise ValueError("El inventario está vacío.")
+    return {
+        "corte": corte.isoformat(), "fuente": fuente, "anexo": anexo, "anioPim": anio_pim,
+        "sha256": hashlib.sha256(contenido).hexdigest(), "obras": registros,
+    }
+
+
+def leer_inventario():
+    return json.loads(SALIDA.read_text(encoding="utf-8").removeprefix(PREFIJO).strip().removesuffix(";"))
+
+
+def guardar(datos):
+    temporal = SALIDA.with_suffix(".js.tmp")
+    temporal.write_text(
+        PREFIJO + json.dumps(datos, ensure_ascii=False, separators=(",", ":"), allow_nan=False) + ";\n",
+        encoding="utf-8",
+    )
+    temporal.replace(SALIDA)
 
 
 if __name__ == "__main__":
@@ -92,9 +175,12 @@ if __name__ == "__main__":
     else:
         with urlopen(ANEXO, timeout=30) as respuesta:
             contenido = respuesta.read()
-    datos = preparar(contenido)
-    SALIDA.write_text(
-        "globalThis.INVENTARIO = " + json.dumps(datos, ensure_ascii=False, separators=(",", ":")) + ";\n",
-        encoding="utf-8",
-    )
+    if hashlib.sha256(contenido).hexdigest() != SHA256:
+        raise ValueError("El archivo difiere del anexo inicial verificado de junio de 2026.")
+    datos = preparar(contenido, date(2026, 6, 30), FUENTE, ANEXO)
+    if len(datos["obras"]) != 2262:
+        raise ValueError("El corte inicial debe contener 2262 obras.")
+    if SALIDA.exists() and leer_inventario()["corte"] > datos["corte"]:
+        raise ValueError("Ya existe un corte más reciente. Usa scripts/actualizar_inventario.py.")
+    guardar(datos)
     print(f'{len(datos["obras"])} obras importadas.')

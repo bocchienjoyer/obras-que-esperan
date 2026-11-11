@@ -7,6 +7,9 @@ const { pathToFileURL } = require("node:url");
 const { after, before, test } = require("node:test");
 const { chromium } = require(process.env.OBRAS_PLAYWRIGHT || "playwright");
 
+require("../dist/obras.js");
+const inventario = globalThis.INVENTARIO;
+const corteInicial = inventario.corte === "2026-06-30";
 const local = pathToFileURL(resolve(__dirname, "../dist/index.html")).href;
 let browser;
 
@@ -41,7 +44,15 @@ async function esperarConteo(pagina, total) {
   }, total);
 }
 
-test("coinciden la consulta territorial, el total y el CSV", () => probar(async pagina => {
+test("muestra el corte vigente y el total del inventario publicado", () => probar(async pagina => {
+  await pagina.goto(local);
+  await esperarConteo(pagina, inventario.obras.length);
+  assert.equal(await pagina.locator("#corte-portada").getAttribute("datetime"), inventario.corte);
+  assert.equal(await pagina.locator("#anexo").getAttribute("href"), inventario.anexo);
+  assert.equal(await pagina.locator("#revision-fuente").isVisible(), Boolean(inventario.revisado));
+}));
+
+test("coinciden la consulta territorial, el total y el CSV del corte inicial", { skip: !corteInicial }, () => probar(async pagina => {
   await pagina.goto(local);
   await esperarConteo(pagina, 2262);
   await pagina.selectOption("#dep", "CUSCO");
@@ -70,7 +81,7 @@ test("coinciden la consulta territorial, el total y el CSV", () => probar(async 
   await esperarConteo(pagina, 54);
 }));
 
-test("distingue identificadores y conserva la búsqueda al volver de una ficha", () => probar(async pagina => {
+test("distingue identificadores y conserva la búsqueda al volver de una ficha", { skip: !corteInicial }, () => probar(async pagina => {
   await pagina.goto(local + "?q=CUI+59");
   await esperarConteo(pagina, 0);
   assert.ok(await pagina.locator("#descargar").isDisabled());
@@ -92,7 +103,7 @@ test("distingue identificadores y conserva la búsqueda al volver de una ficha",
   await esperarConteo(pagina, 1);
 }));
 
-test("abre enlaces de ficha, conserva datos ausentes y funciona en móvil", () => probar(async pagina => {
+test("abre enlaces de ficha, conserva datos ausentes y funciona en móvil", { skip: !corteInicial }, () => probar(async pagina => {
   await pagina.setViewportSize({ width: 390, height: 844 });
   await pagina.goto(local + "?dep=CUSCO&prov=LA+CONVENCION&dist=ECHARATE&obra=5712");
   await pagina.locator("#ficha[open]").waitFor();
@@ -130,7 +141,8 @@ test("añade sugerencias de Codex al borrador sin perder ediciones", {
         else reject(new Error("No se encontró la dirección local."));
       });
     });
-    await pagina.goto(url + "/?obra=5712");
+    const obra = inventario.obras.find(o => o.infobras === "5712") || inventario.obras[0];
+    await pagina.goto(url + "/?obra=" + obra.infobras);
     await pagina.locator("#ficha summary").click();
     await pagina.locator("#pedido").fill("Texto revisado por la persona usuaria.");
     await pagina.getByRole("button", { name: "Sugerir preguntas con IA" }).click();

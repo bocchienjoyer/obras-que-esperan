@@ -1,6 +1,6 @@
 "use strict";
 
-const { obras, corte, fuente, anexo } = globalThis.INVENTARIO;
+const { obras, corte, fuente, anexo, anioPim, revisado } = globalThis.INVENTARIO;
 const porId = new Map(obras.map(obra => [obra.infobras, obra]));
 const $ = id => document.getElementById(id);
 const cantidad = new Intl.NumberFormat("es-PE", { maximumFractionDigits: 2 });
@@ -8,7 +8,8 @@ const moneda = new Intl.NumberFormat("es-PE", { style: "currency", currency: "PE
 const ordenarTexto = new Intl.Collator("es", { sensitivity: "base" }).compare;
 const tamPagina = 12;
 const sinDato = "Sin dato en el anexo";
-const fechaCorte = "30 de junio de 2026";
+const fechaOficial = new Intl.DateTimeFormat("es-PE", { dateStyle: "long", timeZone: "UTC" });
+const fechaCorte = fechaOficial.format(new Date(corte));
 const filtros = ["q", "dep", "prov", "dist", "tipo", "avance", "orden"];
 const comunes = new Set(["en", "de", "del", "la", "las", "el", "los", "y"]);
 const etiquetas = {
@@ -199,14 +200,14 @@ function ficha(codigo, abrirFicha = true) {
     ["Subtipo", obra.subtipo],
     ["Año de inicio", obra.inicio],
     ["Costo de obra según expediente (INFOBRAS)", soles(obra.costo)],
-    ["PIM de la inversión para 2026", obra.cui ? soles(obra.pim) : "Sin CUI asociado"],
+    [anioPim ? `PIM ${anioPim} de la inversión` : "PIM de la inversión", obra.cui ? soles(obra.pim) : "Sin CUI asociado"],
     ["Registro en el inventario MEF", obra.inventarioMef],
     ["En lista priorizada", obra.priorizada],
   ];
   const documentos = [
     obra.informe && fuenteLink(obra.informe, "Informe de estado situacional" + (obra.fechaInforme ? ` (${obra.fechaInforme})` : "")),
     obra.resolucion && fuenteLink(obra.resolucion, "Resolución de priorización" + (obra.fechaResolucion ? ` (${obra.fechaResolucion})` : "")),
-    fuenteLink(anexo, `Anexo 1 · fila ${obra.fila}`),
+    fuenteLink(anexo, `Anexo del inventario · fila ${obra.fila}`),
     fuenteLink("https://www.gob.pe/es/10795-conocer-el-estado-de-las-obras-publicas-en-todo-el-peru-infobras", "Consultar INFOBRAS por código"),
     obra.cui && fuenteLink("https://ofi5.mef.gob.pe/ssi/Ssi/Indexm", "Consultar MEF por CUI"),
   ].filter(Boolean);
@@ -235,8 +236,8 @@ function ficha(codigo, abrirFicha = true) {
     </details>
     <div id="mensaje" role="status"></div>`;
   const id = `INFOBRAS ${obra.infobras}${obra.cui ? `, CUI ${obra.cui}` : ""}`;
-  $("pedido").value = `A ${obra.entidad ?? "la entidad a cargo"}:\n\nSolicito información sobre la obra «${obra.obra}» (${id}), incluida en el Anexo 1 de Contraloría al ${fechaCorte}. Agradeceré indicar el estado actual de la obra y facilitar copia del último informe de estado situacional, del acta de recepción si existe y de los documentos que acrediten su puesta en servicio o las acciones previstas para concluirla.\n\nFuente: ${fuente}`;
-  const referencia = `Contraloría General de la República. Obras públicas paralizadas al ${fechaCorte}, Anexo 1, fila ${obra.fila}. «${obra.obra}» (${id}). ${fuente}`;
+  $("pedido").value = `A ${obra.entidad ?? "la entidad a cargo"}:\n\nSolicito información sobre la obra «${obra.obra}» (${id}), incluida en el anexo del inventario de Contraloría al ${fechaCorte}. Agradeceré indicar el estado actual de la obra y facilitar copia del último informe de estado situacional, del acta de recepción si existe y de los documentos que acrediten su puesta en servicio o las acciones previstas para concluirla.\n\nFuente: ${fuente}`;
+  const referencia = `Contraloría General de la República. Obras públicas paralizadas al ${fechaCorte}, anexo del inventario, fila ${obra.fila}. «${obra.obra}» (${id}). ${fuente}`;
   $("copiar-cita").onclick = () => copiar(referencia);
   $("copiar-enlace").onclick = () => copiar(new URL(enlaceFicha(codigo), location.href).href);
   $("copiar-pedido").onclick = () => copiar($("pedido").value);
@@ -307,6 +308,14 @@ function descargar() {
 
 $("fuente").href = fuente;
 $("anexo").href = anexo;
+$("corte-portada").dateTime = corte;
+$("corte-portada").textContent = `Perú · Corte al ${fechaCorte}`;
+$("corte-fuente").dateTime = corte;
+$("corte-fuente").textContent = fechaCorte;
+if (revisado) {
+  $("revision-fuente").textContent = `Última revisión de publicaciones de Contraloría: ${fechaOficial.format(new Date(revisado))}.`;
+  $("revision-fuente").hidden = false;
+}
 
 function leerURL() {
   const params = new URLSearchParams(location.search);

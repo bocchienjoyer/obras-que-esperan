@@ -33,6 +33,12 @@ class ServidorTest(unittest.TestCase):
         finally:
             conexion.close()
 
+    def codigo_vigente(self):
+        return next(iter(self.servidor.obras))
+
+    def solicitud_valida(self):
+        return json.dumps({"infobras": self.codigo_vigente()}).encode()
+
     def test_sirve_busqueda_y_disponibilidad(self):
         estado, html = self.solicitud("GET", "/")
         self.assertEqual(estado, 200)
@@ -42,7 +48,7 @@ class ServidorTest(unittest.TestCase):
 
     def test_valida_origen_y_codigo_antes_de_invocar_el_modelo(self):
         with patch("servidor.sugerir_preguntas") as modelo:
-            self.assertEqual(self.solicitud("POST", "/api/ia", b'{"infobras":"5712"}',
+            self.assertEqual(self.solicitud("POST", "/api/ia", self.solicitud_valida(),
                                            origen="https://example.com")[0], 403)
             for invalido in (b'{"infobras":"0"}', b'{"infobras":[]}', b'[]', b'{', b' ' * 129):
                 self.assertEqual(self.solicitud("POST", "/api/ia", invalido)[0], 400)
@@ -51,17 +57,17 @@ class ServidorTest(unittest.TestCase):
     def test_devuelve_preguntas_o_mantiene_el_borrador_si_hay_error(self):
         preguntas = [PREGUNTAS[clave] for clave in ("recepcion", "servicio", "avance")]
         with patch("servidor.sugerir_preguntas", return_value=preguntas) as modelo:
-            estado, contenido = self.solicitud("POST", "/api/ia", b'{"infobras":"5712"}')
+            estado, contenido = self.solicitud("POST", "/api/ia", self.solicitud_valida())
             self.assertEqual((estado, json.loads(contenido)), (200, {"preguntas": preguntas}))
-            self.assertEqual(modelo.call_args.args[1]["infobras"], "5712")
+            self.assertEqual(modelo.call_args.args[1]["infobras"], self.codigo_vigente())
         with patch("servidor.sugerir_preguntas", side_effect=ValueError):
-            estado, contenido = self.solicitud("POST", "/api/ia", b'{"infobras":"5712"}')
+            estado, contenido = self.solicitud("POST", "/api/ia", self.solicitud_valida())
             self.assertEqual(estado, 502)
             self.assertIn("borrador", json.loads(contenido)["error"])
 
     def test_protege_consultas_concurrentes(self):
         with self.servidor.turno, patch("servidor.sugerir_preguntas") as modelo:
-            estado, _ = self.solicitud("POST", "/api/ia", b'{"infobras":"5712"}')
+            estado, _ = self.solicitud("POST", "/api/ia", self.solicitud_valida())
             self.assertEqual(estado, 429)
             modelo.assert_not_called()
 
@@ -74,4 +80,4 @@ class ServidorTest(unittest.TestCase):
                 )
             with patch("servidor.subprocess.run", side_effect=respuesta_mock):
                 with self.assertRaises(ValueError):
-                    sugerir_preguntas("codex-prueba", self.servidor.obras["5712"])
+                    sugerir_preguntas("codex-prueba", self.servidor.obras[self.codigo_vigente()])
