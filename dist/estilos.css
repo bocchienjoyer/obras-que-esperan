@@ -2,7 +2,7 @@
  * axes: light/display-condensed/slate-blue · posture: restrained
  * signature: puente, registro territorial y avance físico · states: carga, vacío, error, resultados
  * critique: un solo título, fuentes al pie y color de avance junto al porcentaje */
-@import url("./tokens.css");
+@import url("./tokens.css?v=pizarra");
 @import url("./base.css");
 
 body {
