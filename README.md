@@ -22,11 +22,15 @@ La Contraloría publica el inventario en formato reutilizable y lo vincula con d
 
 ## 6. Demo
 
-Abre [el buscador local](dist/index.html) directamente en un navegador. Para servirlo desde HTTP, ejecuta `python -m http.server 8000 --directory dist` en la raíz y visita [localhost:8000](http://localhost:8000).
+Abre [el buscador local](dist/index.html) directamente en un navegador o usa la [versión privada en línea](https://obras-que-esperan.jpcardenaslover22.chatgpt.site/).
+
+Para usar las sugerencias con IA, inicia sesión en Codex CLI, ejecuta `python servidor.py` en la raíz y visita [127.0.0.1:8000](http://127.0.0.1:8000). Abre una ficha y, dentro de **Preparar un pedido de información**, pulsa **Sugerir preguntas con IA**. La búsqueda, el CSV y el borrador editable funcionan también en la versión estática.
 
 Ejemplo: selecciona **Cusco → La Convención → Echarate** o escribe **¿Cuántas obras paralizadas hay en Echarate?**. Abre una ficha, revisa la entidad y descarga el CSV filtrado. Usa **CUI 2100376** o **INFOBRAS 59** para consultar por código exacto. Los enlaces a informes y resoluciones provienen del anexo. Para confirmar el estado posterior al corte o recuperar un documento que no abre, consulta INFOBRAS y el MEF usando los identificadores de la ficha.
 
 [Buscador nacional](docs/capturas/01-buscador.png) · [Filtro territorial](docs/capturas/02-filtro-territorial.png) · [Ficha de obra](docs/capturas/03-ficha.png)
+
+[Video de respaldo de 78 segundos](docs/video/demo.mp4). Muestra la búsqueda territorial, la descarga de resultados, una ficha real y las preguntas sugeridas con la IA local.
 
 ```mermaid
 flowchart LR
@@ -34,21 +38,27 @@ flowchart LR
   B --> C[Inventario estático verificado]
   C --> D[Buscador territorial]
   D --> E[Ficha, documentos y CSV]
+  E --> F[Servidor local opcional]
+  F --> G[Codex CLI con esquema JSON]
+  G --> H[Preguntas para el borrador]
 ```
 
-El navegador consulta el inventario local. El borrador usa una plantilla con los campos oficiales. El importador se reproduce con `python -m pip install -r requirements.txt` y `python scripts/preparar_datos.py`.
+El navegador consulta el inventario local. El servidor envía a Codex CLI solo el avance y los indicadores del anexo necesarios para ordenar preguntas predefinidas. Los identificadores, cifras y citas de la ficha se mantienen en el navegador. El modelo sugiere tres claves de una lista cerrada y el servidor valida que sean distintas.
+
+El importador se reproduce con `python -m pip install -r requirements.txt` y `python scripts/preparar_datos.py`. Las pruebas del servidor corren con `python -m unittest discover -s tests -v`. Para las pruebas de navegador, instala las dependencias con `npm install`, ejecuta `npx playwright install chromium` y luego `npm test`. La prueba que usa el modelo real se habilita con la variable `OBRAS_IA_REAL=1`.
 
 ## 7. Modelo de negocio
 
-Hipótesis por validar: búsqueda abierta y suscripción institucional de S/49 mensuales por alertas de nuevos cortes y seguimiento de obras guardadas. La consulta actual usa cero tokens y el alojamiento sirve archivos estáticos. Las alertas son una hipótesis de producto.
+Hipótesis por validar: búsqueda abierta y suscripción institucional de S/49 mensuales por alertas de nuevos cortes y seguimiento de obras guardadas. La búsqueda y la exportación usan cero tokens. La generación de preguntas consume una llamada de la sesión de Codex del usuario. El alojamiento sirve archivos estáticos y las alertas son una hipótesis de producto.
 
 ## 8. Herramientas del curso
 
 - **Ingesta web (sesión 03).** [preparar_datos.py](scripts/preparar_datos.py) descarga el anexo oficial, verifica su huella y prepara los campos de cada ficha.
 - **Dashboards (sesión 05).** [buscador.js](dist/buscador.js) cruza los filtros, cuenta las obras y prepara la exportación.
+- **LLM con salida estructurada (sesión 08).** [servidor.py](servidor.py) pide sugerencias con un esquema JSON y comprueba cada clave antes de agregar preguntas al borrador.
 
 Referencias de diseño: búsqueda por entidad y ubicación en [INFOBRAS](https://www.gob.pe/es/10795-conocer-el-estado-de-las-obras-publicas-en-todo-el-peru-infobras), filtros territoriales de la [Consulta Avanzada del MEF](https://ofi5.mef.gob.pe/invierte/consultaPublica/consultaAvanzada) y búsqueda por identificador del [SSI](https://ofi5.mef.gob.pe/ssi/Ssi/Indexm).
 
 ## 9. Qué hizo el agente
 
-Codex implementó la ingesta, el buscador, la ficha, la exportación y el borrador editable. Los registros provienen del Anexo 1 de Contraloría de junio de 2026.
+Codex implementó la ingesta, el buscador, la ficha, la exportación, el borrador editable, las sugerencias locales y las pruebas automatizadas. Los registros provienen del Anexo 1 de Contraloría de junio de 2026.

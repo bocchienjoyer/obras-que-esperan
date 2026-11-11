@@ -17,6 +17,9 @@ const etiquetas = {
   costo: "Mayor costo de obra",
 };
 const estados = { pagina: 1, resultados: [] };
+const iaLocal = location.protocol === "http:" && location.hostname === "127.0.0.1"
+  ? fetch("/api/ia").then(respuesta => respuesta.ok ? respuesta.json() : {}).then(datos => datos.disponible === true).catch(() => false)
+  : Promise.resolve(false);
 
 function normalizar(texto) {
   return String(texto ?? "").normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
@@ -108,13 +111,15 @@ function enlaceFicha(codigo) {
   return "?" + params.toString();
 }
 
-function actualizarURL(codigo) {
+function actualizarURL(codigo, abrirFicha = false) {
   const params = paramsBusqueda();
   if (codigo) params.set("obra", codigo);
   const sufijo = params.size ? "?" + params.toString() : "";
   // Los archivos abiertos directamente también permiten enlaces relativos con filtros.
   try {
-    history.replaceState(null, "", location.pathname + sufijo);
+    const url = location.pathname + sufijo;
+    if (abrirFicha) history.pushState({ fichaAbierta: true }, "", url);
+    else history.replaceState(null, "", url);
   } catch {
     // Algunos navegadores restringen history en archivos locales.
   }
@@ -179,7 +184,7 @@ function fuenteLink(url, texto) {
   return `<a href="${entidadHtml(url)}" target="_blank" rel="noopener noreferrer">${entidadHtml(texto)} ↗</a>`;
 }
 
-function ficha(codigo) {
+function ficha(codigo, abrirFicha = true) {
   const obra = porId.get(codigo);
   if (!obra) return;
   const campos = [
@@ -222,7 +227,11 @@ function ficha(codigo) {
       <summary>Preparar un pedido de información</summary>
       <label for="pedido">Borrador editable</label>
       <textarea id="pedido" rows="6"></textarea>
-      <button type="button" class="button secondary" id="copiar-pedido">Copiar pedido</button>
+      <div class="acciones">
+        <button type="button" class="button secondary" id="copiar-pedido">Copiar pedido</button>
+        <button type="button" class="button secondary" id="sugerir-preguntas" hidden>Sugerir preguntas con IA</button>
+      </div>
+      <div id="estado-ia" class="nota" role="status"></div>
     </details>
     <div id="mensaje" role="status"></div>`;
   const id = `INFOBRAS ${obra.infobras}${obra.cui ? `, CUI ${obra.cui}` : ""}`;
@@ -231,9 +240,35 @@ function ficha(codigo) {
   $("copiar-cita").onclick = () => copiar(referencia);
   $("copiar-enlace").onclick = () => copiar(new URL(enlaceFicha(codigo), location.href).href);
   $("copiar-pedido").onclick = () => copiar($("pedido").value);
+  configurarSugerencias(codigo);
   if (!$("ficha").open) $("ficha").showModal();
   $("ficha").scrollTop = 0;
-  actualizarURL(codigo);
+  if (abrirFicha) actualizarURL(codigo, true);
+}
+
+function configurarSugerencias(codigo) {
+  const boton = $("sugerir-preguntas");
+  const borrador = $("pedido");
+  const estado = $("estado-ia");
+  iaLocal.then(disponible => { boton.hidden = !disponible; });
+  boton.onclick = async () => {
+    boton.disabled = true;
+    estado.textContent = "Generando preguntas a partir de los campos del anexo…";
+    try {
+      const respuesta = await fetch("/api/ia", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ infobras: codigo }), signal: AbortSignal.timeout(50000),
+      });
+      const datos = await respuesta.json();
+      if (!respuesta.ok) throw new Error(datos.error);
+      const preguntas = datos.preguntas.map((texto, i) => `${i + 1}. ${texto}`).join("\n");
+      borrador.value = `${borrador.value.trimEnd()}\n\nPreguntas de seguimiento\n${preguntas}`;
+      estado.textContent = "Se añadieron tres preguntas. Revísalas antes de copiar el pedido.";
+    } catch (error) {
+      estado.textContent = error.message || "La IA no respondió. Puedes editar el borrador.";
+      boton.disabled = false;
+    }
+  };
 }
 
 async function copiar(texto) {
@@ -270,18 +305,28 @@ function descargar() {
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
-const inicial = new URLSearchParams(location.search);
 $("fuente").href = fuente;
 $("anexo").href = anexo;
-opciones($("dep"), "Todo el Perú", obras.map(obra => obra.departamento), inicial.get("dep"));
-actualizarUbicacion({ prov: inicial.get("prov"), dist: inicial.get("dist") });
-opciones($("tipo"), "Todos los tipos", obras.map(obra => obra.tipo), inicial.get("tipo"));
-$("q").value = inicial.get("q") ?? "";
-if (["90", "100", "sin"].includes(inicial.get("avance"))) $("avance").value = inicial.get("avance");
-if (Object.hasOwn(etiquetas, inicial.get("orden"))) $("orden").value = inicial.get("orden");
-estados.pagina = Number.parseInt(inicial.get("pagina"), 10) || 1;
-buscar({ reiniciar: false, sincronizar: false });
-if (inicial.has("obra")) ficha(inicial.get("obra"));
+
+function leerURL() {
+  const params = new URLSearchParams(location.search);
+  opciones($("dep"), "Todo el Perú", obras.map(obra => obra.departamento), params.get("dep"));
+  actualizarUbicacion({ prov: params.get("prov"), dist: params.get("dist") });
+  opciones($("tipo"), "Todos los tipos", obras.map(obra => obra.tipo), params.get("tipo"));
+  $("q").value = params.get("q") ?? "";
+  const avance = params.get("avance");
+  $("avance").value = ["90", "100", "sin"].includes(avance) ? avance : "";
+  const orden = params.get("orden");
+  $("orden").value = Object.hasOwn(etiquetas, orden) ? orden : "original";
+  estados.pagina = Number.parseInt(params.get("pagina"), 10) || 1;
+  buscar({ reiniciar: false, sincronizar: false });
+  const codigo = params.get("obra");
+  if (porId.has(codigo)) ficha(codigo, false);
+  else if ($("ficha").open) $("ficha").close();
+}
+
+leerURL();
+window.addEventListener("popstate", leerURL);
 
 $("busqueda").addEventListener("submit", evento => { evento.preventDefault(); buscar(); });
 $("q").addEventListener("input", () => buscar());
@@ -309,5 +354,9 @@ $("lista").addEventListener("click", evento => {
   evento.preventDefault();
   ficha(link.dataset.obra);
 });
-$("ficha").addEventListener("close", () => actualizarURL());
+$("ficha").addEventListener("close", () => {
+  if (!new URLSearchParams(location.search).has("obra")) return;
+  if (history.state?.fichaAbierta) history.back();
+  else actualizarURL();
+});
 $("descargar").onclick = descargar;
